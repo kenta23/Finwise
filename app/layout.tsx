@@ -1,17 +1,16 @@
 import { Toaster } from "@/components/ui/sonner";
 import "./global.css";
-import type React from "react";
 import type { Metadata } from "next";
+import type React from "react";
 import { AppSidebar } from "@/components/app-sidebar";
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { SiteHeader } from "@/components/site-header";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
 export const metadata: Metadata = {
 	title: "Budgety",
 	description: "Budgety is a budget management tool that helps you track your income and expenses.",
 	applicationName: "Budgety",
 };
-
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
 	return (

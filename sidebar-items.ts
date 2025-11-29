@@ -1,4 +1,3 @@
-
 import {
 	IconCamera,
 	IconCash,
@@ -18,7 +17,6 @@ import {
 	IconSettings,
 	IconUsers,
 } from "@tabler/icons-react";
-
 
 export const sidebarItems = {
 	user: {
@@ -51,11 +49,6 @@ export const sidebarItems = {
 			title: "Savings",
 			url: "/savings",
 			icon: IconPigMoney,
-		},
-		{
-			title: "Team",
-			url: "#",
-			icon: IconUsers,
 		},
 	],
 	navClouds: [

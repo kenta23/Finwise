@@ -1,6 +1,6 @@
 "use client";
 
-import { IncomeManager } from "@/components/income-manager";
+import { IncomeManager } from "@/app/income/income-manager";
 
 export default function Page() {
     return (

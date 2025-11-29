@@ -14,15 +14,46 @@ import {
 
 export function SectionCards() {
 	const [totalIncome, setTotalIncome] = useState<number>(0);
+	const [totalSavings, setTotalSavings] = useState<number>(0);
 	// const expenses = localStorage.getItem("expenses");
 
-	useEffect(() => {
+	const updateIncome = () => {
 		const income = localStorage.getItem("income");
-
 		const total = income
 			? JSON.parse(income).reduce((acc: number, curr: { amount: number }) => acc + curr.amount, 0)
 			: 0;
 		setTotalIncome(total);
+	};
+
+	const updateSavings = () => {
+		const savings = localStorage.getItem("savings");
+		const total = savings
+			? JSON.parse(savings).reduce((acc: number, curr: { currentAmount: number }) => acc + curr.currentAmount, 0)
+			: 0;
+		setTotalSavings(total);
+	};
+
+	useEffect(() => {
+		updateIncome();
+		updateSavings();
+
+		// Listen for income updates
+		const handleIncomeUpdate = () => {
+			updateIncome();
+		};
+
+		// Listen for savings updates
+		const handleSavingsUpdate = () => {
+			updateSavings();
+		};
+
+		window.addEventListener("incomeUpdated", handleIncomeUpdate);
+		window.addEventListener("savingsUpdated", handleSavingsUpdate);
+
+		return () => {
+			window.removeEventListener("incomeUpdated", handleIncomeUpdate);
+			window.removeEventListener("savingsUpdated", handleSavingsUpdate);
+		};
 	}, []);
 
 	console.log("totalIncome", totalIncome);
@@ -83,14 +114,14 @@ export function SectionCards() {
 				<CardHeader>
 					<CardDescription>Savings</CardDescription>
 					<CardTitle className="text-xl font-bold tabular-nums @[250px]/card:text-3xl">
-						$42,000.00
+						₱{totalSavings.toLocaleString()}
 					</CardTitle>
 
 					<CardAction>
 						<Badge variant="outline">
 							<IconTrendingUp />
 							{/** SAVINGS RATIO */}
-							+2.5%
+							{totalSavings > 0 ? "+" : ""}
 						</Badge>
 					</CardAction>
 				</CardHeader>
@@ -100,7 +131,7 @@ export function SectionCards() {
 						Savings <IconTrendingUp className="size-4" />
 					</div>
 
-					<div className="text-muted-foreground">Total savings added</div>
+					<div className="text-muted-foreground">Total savings across all accounts</div>
 				</CardFooter>
 			</Card>
 

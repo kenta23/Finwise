@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import ExpenseCategory from "@/components/expense-category";
-import { IncomeChart } from "@/components/income-chart";
+import ExpenseCategory from "@/app/dashboard/expense-category";
+import { IncomeChart } from "@/app/dashboard/income-chart";
 import data from '@/data.json';
-import { SectionCards } from "@/components/section-cards";
+import { SectionCards } from "@/app/dashboard/section-cards";
 import { DataTable } from "@/components/data-table";
 
 

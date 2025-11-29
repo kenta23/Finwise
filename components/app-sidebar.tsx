@@ -1,5 +1,5 @@
 "use client";
-import { sidebarItems as data } from "@/sidebar-items";
+import { IconInnerShadowTop } from "@tabler/icons-react";
 import type * as React from "react";
 import { NavDocuments } from "@/components/nav-documents";
 import { NavMain } from "@/components/nav-main";
@@ -14,8 +14,7 @@ import {
 	SidebarMenuButton,
 	SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { IconInnerShadowTop } from "@tabler/icons-react";
-
+import { sidebarItems as data } from "@/sidebar-items";
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 	return (
@@ -24,6 +23,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 				<SidebarMenu>
 					<SidebarMenuItem>
 						<SidebarMenuButton asChild className="data-[slot=sidebar-menu-button]:!p-1.5">
+							{/**LOGO HERE */}
 							<a href="#">
 								<IconInnerShadowTop className="!size-5" />
 								<span className="text-base font-semibold">Budgety</span>
@@ -34,8 +34,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 			</SidebarHeader>
 			<SidebarContent>
 				<NavMain items={data.navMain} />
-				<NavDocuments items={data.documents} />
-				<NavSecondary items={data.navSecondary} className="mt-auto" />
+				{/* <NavDocuments items={data.documents} />
+				<NavSecondary items={data.navSecondary} className="mt-auto" /> */}
 			</SidebarContent>
 			<SidebarFooter>
 				<NavUser user={data.user} />
