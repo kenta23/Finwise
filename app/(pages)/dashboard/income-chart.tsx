@@ -17,6 +17,8 @@ import {
 	ChartTooltip,
 	ChartTooltipContent,
 } from "@/components/ui/chart";
+import { useQuery } from "@tanstack/react-query";
+import { getIncome } from "@/app/actions/income";
 
 export const description = "A simple pie chart";
 
@@ -55,36 +57,36 @@ const chartConfig = {
 	},
 } satisfies ChartConfig;
 
+
+
+type incomeType = {
+	source: string;
+	id: string;
+	amount: number;
+	frequency: string;
+	income_name: string;
+	createdAt: Date;
+	updatedAt: Date;
+	userId: string;
+}[]
+
+
 export function IncomeChart() {
-	const [incomeData, setIncomeData] = useState<
-		{ source: string; amount: number; frequency: string }[]
-	>([]);
+	// const [incomeData, setIncomeData] = useState<
+	// 	{ source: string; amount: number; frequency: string }[]
+	// >([]);
 
-	const loadIncomeData = useCallback(() => {
-		const income = localStorage.getItem("income");
-		const data = income ? JSON.parse(income) : [];
-		setIncomeData(data);
-	}, []);
+	const { data: incomeData, isLoading, isError } = useQuery({
+		queryKey: ["income-charts-data"],
+		queryFn: async () => await getIncome(),
+	})
 
-	useEffect(() => {
-		// Load initial data
-		loadIncomeData();
 
-		// Listen for storage events from other tabs/windows
-		window.addEventListener("storage", loadIncomeData);
+	console.log("incomeData", incomeData);
 
-		// Listen for custom event when data is saved in same tab
-		window.addEventListener("incomeUpdated", loadIncomeData);
-
-		return () => {
-			window.removeEventListener("storage", loadIncomeData);
-			window.removeEventListener("incomeUpdated", loadIncomeData);
-		};
-	}, [loadIncomeData]);
-
-	const mergedData = incomeData.reduce(
+	const mergedData = incomeData?.data?.reduce(
 		(acc, curr) => {
-			const existingSource = acc.find((source) => source.source === curr.source);
+			const existingSource = acc?.find((source: { source: string }) => source.source === curr.source);
 
 			if (existingSource) {
 				existingSource.amount += curr.amount;
@@ -93,12 +95,12 @@ export function IncomeChart() {
 			}
 			return acc;
 		},
-		[] as { source: string; amount: number }[]
-	);
+		[] as incomeType
+	) || [];
 
 	console.log("mergedData", mergedData);
 
-	const chartData = mergedData.map((item) => ({
+	const chartData = mergedData?.map((item: { source: string; amount: number }) => ({
 		source: item.source, // Capitalize first letter
 		amount: item.amount,
 		fill: sourceColorMap[item.source] || "#6b7280", // Default gray if not found
@@ -114,7 +116,7 @@ export function IncomeChart() {
 				<CardDescription>Showing your income for each source you have added</CardDescription>
 			</CardHeader>
 			<CardContent className="flex-1 pb-0">
-				{chartData.length > 0 ? (
+				{chartData && chartData?.length > 0 ? (
 					<ChartContainer config={chartConfig} className="mx-auto aspect-square max-h-[250px]">
 						<PieChart>
 							<ChartTooltip cursor={false} content={<ChartTooltipContent hideLabel />} />

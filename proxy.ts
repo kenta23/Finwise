@@ -9,6 +9,15 @@ export async function proxy(request: NextRequest) {
 
 	console.log("session proxy", session);
 
+	// Get the pathname to check if user is on public pages
+	const pathname = new URL(request.url).pathname;
+	const publicPaths = ["/login", "/signup"];
+
+	// Allow access to public pages without session
+	if (publicPaths.includes(pathname)) {
+		return NextResponse.next();
+	}
+
 	// THIS IS NOT SECURE!
 	// This is the recommended approach to optimistically redirect users
 	// We recommend handling auth checks in each page/route
@@ -20,5 +29,5 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
 	runtime: "nodejs", // Required for auth.api calls
-	matcher: ["/dashboard/:path*", "/income/:path*", "/expenses/:path*", "/savings/:path*", '/((?!api|_next/static|_next/image|.*\\.png$).*)',], 
+	matcher: ["/dashboard/:path*", "/login", "/signup", "/income/:path*", "/expenses/:path*", "/savings/:path*", '/((?!api|_next/static|_next/image|.*\\.png$).*)',], 
 };

@@ -37,6 +37,7 @@ export const auth = betterAuth({
 				throw new Error("Failed to send verification email");
 			}
 		},
+		sendOnSignIn: true,
 		// Automatically send verification email when user signs up
 		sendOnSignUp: true,
 		// Automatically sign in the user after they verify their email

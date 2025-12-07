@@ -6,15 +6,28 @@ import {
     IconChartLine,
     IconEdit,
     IconEye,
+    IconLoader2,
     IconPigMoney,
     IconPlus,
     IconReceipt,
     IconTrash,
     IconTrendingUp,
 } from "@tabler/icons-react";
-import { useActionState, useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Form from "next/form";
+import { startTransition, useEffect, useOptimistic, useState } from "react";
 import { toast } from "sonner";
 import z from "zod";
+import { deleteIncome, editIncome, getIncome } from "@/app/actions/income";
+import { submitNewIncome } from "@/app/actions/query";
+import {
+    frequencyLabels,
+    incomeColors,
+    incomeIcons,
+    incomeSources,
+    incomeSourcesType,
+} from "@/data";
+import { useSession } from "@/lib/auth-client";
 import { Button } from "../../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/card";
 import {
@@ -28,96 +41,162 @@ import {
 } from "../../../components/ui/dialog";
 import { Input } from "../../../components/ui/input";
 import { Label } from "../../../components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../../components/ui/select";
-import { submitNewIncome } from "@/app/actions/query";
-import Form from 'next/form';
-
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "../../../components/ui/select";
+import EditIncomeDialog from "./edit-income-dialog";
+import { ViewIncomeDialog } from "./view-income-dialog";
 
 type IncomeItem = {
-    id: string;
+    id?: string;
     amount: number;
     source: string;
     frequency: string;
-    name: string;
-    date: string;
+    income_name: string;
+    date?: string;
 };
-
 
 const incomeSchema = z.object({
     amount: z.number().positive("Amount must be greater than 0"),
     source: z.string().min(1, "Please select an income source"),
     frequency: z.string().min(1, "Please select a frequency"),
-    name: z.string().min(1, "Income name is required"),
+    income_name: z.string().min(1, "Income name is required"),
 });
-
-const incomeIcons: Record<
-    string,
-    React.ComponentType<{ size?: number; color?: string; className?: string }>
-> = {
-    salary: IconBriefcase,
-    freelance: IconCash,
-    business: IconReceipt,
-    investment: IconChartLine,
-    other: IconPigMoney,
-};
-
-const incomeColors: Record<string, { color: string; backgroundColor: string }> = {
-    salary: {
-        color: "#1a64db",
-        backgroundColor: "#e7effb",
-    },
-    freelance: {
-        color: "#f59e42",
-        backgroundColor: "#fff5e6",
-    },
-    business: {
-        color: "#e44e68",
-        backgroundColor: "#fde4ec",
-    },
-    investment: {
-        color: "#60b27e",
-        backgroundColor: "#e7f7ee",
-    },
-    other: {
-        color: "#9b59b6",
-        backgroundColor: "#f4ecf7",
-    },
-};
-
-const frequencyLabels: Record<string, string> = {
-    "per-day": "Daily",
-    "per-week": "Weekly",
-    "per-month": "Monthly",
-    "per-year": "Yearly",
-};
 
 const initialState = {
     message: "",
     error: null,
 };
 
+// type FormData = {
+//     amount: number;
+//     source: string;
+//     frequency: string;
+//     income_name: string;
+// };
+
+type IncomeItemType = {
+    source: string;
+    amount: number;
+    id: string;
+    frequency: string;
+    income_name: string;
+    createdAt: Date;
+    updatedAt: Date;
+    userId: string;
+};
+
+type incomeType = IncomeItemType[];
+
 export function IncomeManager() {
+    const { data: session } = useSession();
     const [incomeItems, setIncomeItems] = useState<IncomeItem[]>([]);
     const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<IncomeItem | null>(null);
     const [viewingItem, setViewingItem] = useState<IncomeItem | null>(null);
     const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
-    const [state, formAction, pending] = useActionState(submitNewIncome, initialState)
-
-
-    console.log("state", state);
-    console.log("pending", pending);
-
-
-
+    const queryClient = useQueryClient();
     const [formData, setFormData] = useState({
-        amount: "",
+        amount: 0,
         source: "salary",
         frequency: "per-month",
-        name: "",
+        income_name: "",
     });
     const [errors, setErrors] = useState<z.ZodError | null>(null);
+    const {
+        data: incomeData,
+        isLoading,
+        isError,
+    } = useQuery({
+        queryKey: ["income"],
+        queryFn: async () => await getIncome(),
+    });
+
+    const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
+    const { mutate: deleteIncomeMutation, isPending: isDeletePending } = useMutation({
+        mutationFn: async (id: string) => await deleteIncome(id),
+        onSuccess: (data) => {
+            toast.success(data.message, {
+                description: "Income has been removed from your income list.",
+            });
+            queryClient.invalidateQueries({ queryKey: ["income"] });
+            setDeletingItemId(null);
+        },
+        onError: (error) => {
+            toast.error(error.message, {
+                description: "Failed to delete income",
+            });
+            setDeletingItemId(null);
+        },
+        onSettled: () => {
+            setDeletingItemId(null);
+        },
+    });
+    //optimistic update
+    // Define action types for optimistic updates
+
+    type OptimisticAction = { type: "delete"; id: string } | { type: "add"; item: IncomeItemType } | { type: "edit"; item: IncomeItemType };
+
+    const [optimisticIncomeData, optimisticUpdate] = useOptimistic(
+        incomeData?.data || [],
+        (state, action: OptimisticAction) => {
+            if (action.type === "delete") {
+                return state.filter((item) => item.id !== action.id);
+            }
+            if (action.type === "add") {
+                return [...state, action.item].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+            }
+            if (action.type === "edit") {
+                return state.map((item) => item.id === action.item.id ? { ...item, ...action.item } : item);
+            }
+            return state;
+        }
+    );
+
+    //mutation
+    const { mutate: editIncomeMutation, isPending: isEditPending } = useMutation({
+        mutationKey: ['editIncome'],
+        onSuccess: (data) => {
+            toast.success(data.message, {
+                description: "Income has been updated successfully",
+            });
+            queryClient.invalidateQueries({ queryKey: ["income"] });
+        },
+        onError: (error) => {
+            toast.error(error.message, {
+                description: "Failed to edit income",
+            });
+        },
+        mutationFn: async ({ formData, id }: { formData: Partial<IncomeItemType>, id: string }) => await editIncome(formData, id)
+    })
+
+    const {
+        mutate: submitNewIncomeMutation,
+        isPending,
+        isSuccess,
+    } = useMutation({
+        mutationKey: ["submitNewIncome"],
+        mutationFn: async (formdata: Omit<IncomeItemType, "id" | "createdAt" | "updatedAt" | "userId">) => await submitNewIncome(formdata),
+        onSuccess: (data) => {
+            toast.success(data.message, {
+                description: `${formData.income_name} has been added to your income list.`,
+            });
+
+            setIsAddDialogOpen(false);
+            resetForm();
+            queryClient.invalidateQueries({ queryKey: ["income"] });
+        },
+        onError: (error) => {
+            toast.error(error.message, {
+                description: `${formData.income_name} has not been added to your income list.`,
+            });
+        },
+    });
 
     useEffect(() => {
         const stored = localStorage.getItem("income");
@@ -139,85 +218,77 @@ export function IncomeManager() {
 
     const resetForm = () => {
         setFormData({
-            amount: "",
+            amount: 0,
             source: "salary",
             frequency: "per-month",
-            name: "",
+            income_name: "",
         });
         setErrors(null);
     };
 
-    const handleAddIncome = () => {
-        try {
-            const parsed = incomeSchema.parse({
-                ...formData,
-                amount: Number(formData.amount),
-            });
+    const handleAddIncome = async (e: React.MouseEvent<HTMLButtonElement>) => {
+        e.preventDefault();
+        const parsedData = incomeSchema.safeParse(formData);
 
-            const newItem: IncomeItem = {
-                id: Date.now().toString(),
-                ...parsed,
-                date: new Date().toISOString(),
-            };
-
-            const updatedItems = [...incomeItems, newItem];
-            saveIncomeItems(updatedItems);
-
-            toast.success("Income added successfully", {
-                description: `${parsed.name} has been added to your income list.`,
-            });
-
-            resetForm();
-            setIsAddDialogOpen(false);
-        } catch (error) {
-            setErrors(error as z.ZodError);
+        if (!parsedData.success) {
+            setErrors(parsedData.error);
+            return;
         }
+
+        setIsAddDialogOpen(false);
+        resetForm();
+        startTransition(() => {
+            optimisticUpdate({
+                type: "add",
+                item: {
+                    ...parsedData.data,
+                    id: crypto.randomUUID(),
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                    userId: session?.user?.id as string,
+                },
+            });
+            submitNewIncomeMutation(parsedData?.data);
+        });
+
     };
 
-    const handleEditIncome = () => {
-        if (!editingItem) return;
+    const handleEditIncome = (e: React.MouseEvent<HTMLButtonElement>) => {
+        e.preventDefault();
+        if (!editingItem || !editingItem.id) return;
 
         try {
-            const parsed = incomeSchema.parse({
-                ...formData,
-                amount: Number(formData.amount),
-            });
-
-            const updatedItems = incomeItems.map((item) =>
-                item.id === editingItem.id ? { ...item, ...parsed, date: new Date().toISOString() } : item
-            );
-
-            saveIncomeItems(updatedItems);
-
-            toast.success("Income updated successfully", {
-                description: `${parsed.name} has been updated.`,
-            });
-
-            resetForm();
             setIsEditDialogOpen(false);
-            setEditingItem(null);
+
+
+            startTransition(() => {
+                optimisticUpdate({ type: "edit", item: { ...editingItem, ...formData, id: editingItem.id as string, createdAt: new Date(), updatedAt: new Date(), userId: session?.user?.id as string } });
+                editIncomeMutation({ formData, id: editingItem.id as string });
+                setEditingItem(null);
+                resetForm();
+            });
         } catch (error) {
             setErrors(error as z.ZodError);
         }
+
     };
 
     const handleDeleteIncome = (id: string) => {
-        const item = incomeItems.find((i) => i.id === id);
-        const updatedItems = incomeItems.filter((item) => item.id !== id);
-        saveIncomeItems(updatedItems);
-
-        toast.success("Income deleted", {
-            description: `${item?.name} has been removed from your income list.`,
+        // Optimistically update UI immediately (wrapped in startTransition for React 19+)
+        startTransition(() => {
+            optimisticUpdate({ type: "delete", id });
         });
+        // Then perform the actual mutation
+        deleteIncomeMutation(id);
     };
 
     const openEditDialog = (item: IncomeItem) => {
         setEditingItem(item);
         setFormData({
-            amount: item.amount.toString(),
+            amount: item.amount,
             source: item.source,
             frequency: item.frequency,
-            name: item.name,
+            income_name: item.income_name,
         });
         setIsEditDialogOpen(true);
         setErrors(null);
@@ -229,7 +300,7 @@ export function IncomeManager() {
     };
 
     const calculateTotals = () => {
-        const totals = incomeItems.reduce(
+        const totals = optimisticIncomeData?.reduce(
             (acc, item) => {
                 if (!acc[item.frequency]) {
                     acc[item.frequency] = 0;
@@ -244,10 +315,11 @@ export function IncomeManager() {
             perWeek: totals["per-week"] || 0,
             perMonth: totals["per-month"] || 0,
             perYear: totals["per-year"] || 0,
+            total: totals.perWeek + totals.perMonth + totals.perYear,
         };
     };
 
-    const { perWeek, perMonth, perYear } = calculateTotals();
+    const { perWeek, perMonth, perYear, total } = calculateTotals();
 
     const getErrorMessage = (field: string) => {
         if (!errors) return null;
@@ -255,9 +327,13 @@ export function IncomeManager() {
         return error?.message;
     };
 
+    const handleSubmitNewIncome = async (e: React.MouseEvent<HTMLButtonElement>) => {
+        e.preventDefault();
 
+        console.log("formData", formData);
 
-
+        submitNewIncomeMutation(formData);
+    };
 
     return (
         <div className="w-full h-auto py-3">
@@ -270,7 +346,7 @@ export function IncomeManager() {
                             <IconCash className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">{incomeItems.length}</div>
+                            <div className="text-2xl font-bold">{optimisticIncomeData?.length}</div>
                             <p className="text-xs text-muted-foreground">Active income streams</p>
                         </CardContent>
                     </Card>
@@ -320,152 +396,146 @@ export function IncomeManager() {
                         </DialogTrigger>
 
                         <DialogContent>
-                            <Form action={formAction} onSubmit={() => {
-                                if (!state.error) {
-                                    toast.success(state.message, {
-                                        description: state.message,
-                                    })
-                                    resetForm();
-                                    setIsAddDialogOpen(false);
-                                }
-                                else {
-                                    toast.error("Failed to add new income", {
-                                        description: state.message,
-                                    })
-                                }
-                            }}>
-                                <DialogHeader>
-                                    <DialogTitle>Add New Income</DialogTitle>
-                                    <DialogDescription>
-                                        Add a new income source to track your earnings. Fill in the details below.
-                                    </DialogDescription>
-                                </DialogHeader>
+                            <DialogHeader>
+                                <DialogTitle>Add New Income</DialogTitle>
+                                <DialogDescription>
+                                    Add a new income source to track your earnings. Fill in the details below.
+                                </DialogDescription>
+                            </DialogHeader>
 
-
-
-                                <div className="grid gap-4 py-4">
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="income_name">Income Name</Label>
-                                        <Input
-                                            id="income_name"
-                                            name="income_name"
-                                            placeholder="e.g., Main Job Salary, Freelance Project"
-                                            value={formData.name}
-                                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                        />
-                                        {getErrorMessage("name") && (
-                                            <p className="text-sm text-red-500">{getErrorMessage("name")}</p>
-                                        )}
-                                    </div>
-
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="amount">Amount</Label>
-                                        <div className="relative">
-                                            <span className="text-muted-foreground text-sm absolute left-2 top-1/2 -translate-y-1/2">
-                                                ₱
-                                            </span>
-                                            <Input
-                                                id="amount"
-                                                name="amount"
-                                                type="number"
-                                                min="0"
-                                                step="0.01"
-                                                placeholder="0.00"
-                                                className="pl-6"
-                                                value={formData.amount}
-                                                onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                                            />
-                                        </div>
-                                        {getErrorMessage("amount") && (
-                                            <p className="text-sm text-red-500">{getErrorMessage("amount")}</p>
-                                        )}
-                                    </div>
-
-                                    <div className="grid grid-cols-12 gap-4">
-                                        <div className="grid gap-2 col-span-6">
-                                            <Label htmlFor="source">Income Source</Label>
-                                            <Select
-                                                name="source"
-                                                value={formData.source}
-                                                onValueChange={(value) => setFormData({ ...formData, source: value })}
-                                            >
-                                                <SelectTrigger className="cursor-pointer w-full">
-                                                    <SelectValue placeholder="Select income source" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem className="cursor-pointer" value="salary">
-                                                        Salary
-                                                    </SelectItem>
-                                                    <SelectItem className="cursor-pointer" value="freelance">
-                                                        Freelance
-                                                    </SelectItem>
-                                                    <SelectItem className="cursor-pointer" value="business">
-                                                        Business
-                                                    </SelectItem>
-                                                    <SelectItem className="cursor-pointer" value="investment">
-                                                        Investment
-                                                    </SelectItem>
-                                                    <SelectItem className="cursor-pointer" value="other">
-                                                        Other
-                                                    </SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                            {getErrorMessage("source") && (
-                                                <p className="text-sm text-red-500">{getErrorMessage("source")}</p>
-                                            )}
-                                        </div>
-
-                                        <div className="grid gap-2 col-span-6">
-                                            <Label htmlFor="frequency">Frequency</Label>
-                                            <Select
-                                                name="frequency"
-                                                value={formData.frequency}
-                                                onValueChange={(value) => setFormData({ ...formData, frequency: value })}
-                                            >
-                                                <SelectTrigger className="cursor-pointer w-full">
-                                                    <SelectValue placeholder="Select frequency" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem className="cursor-pointer" value="per-week">
-                                                        Per Week
-                                                    </SelectItem>
-                                                    <SelectItem className="cursor-pointer" value="per-month">
-                                                        Per Month
-                                                    </SelectItem>
-                                                    <SelectItem className="cursor-pointer" value="per-year">
-                                                        Per Year
-                                                    </SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                            {getErrorMessage("frequency") && (
-                                                <p className="text-sm text-red-500">{getErrorMessage("frequency")}</p>
-                                            )}
-                                        </div>
-                                    </div>
+                            <div className="grid gap-4 py-4">
+                                <div className="grid gap-2">
+                                    <Label htmlFor="income_name">Income Name</Label>
+                                    <Input
+                                        id="income_name"
+                                        name="income_name"
+                                        disabled={isPending}
+                                        placeholder="e.g., Main Job Salary, Freelance Project"
+                                        value={formData.income_name}
+                                        onChange={(e) => setFormData({ ...formData, income_name: e.target.value })}
+                                    />
+                                    {getErrorMessage("income_name") && (
+                                        <p className="text-sm text-red-500">{getErrorMessage("income_name")}</p>
+                                    )}
                                 </div>
 
-                                <DialogFooter>
-                                    <Button
-                                        variant="outline"
-                                        onClick={() => {
-                                            setIsAddDialogOpen(false);
-                                            resetForm();
-                                        }}
-                                    >
-                                        Cancel
-                                    </Button>
-                                    <Button type="submit" className="cursor-pointer">
-                                        Add Income
-                                    </Button>
-                                </DialogFooter>
-                            </Form>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="amount">Amount</Label>
+                                    <div className="relative">
+                                        <span className="text-muted-foreground text-sm absolute left-2 top-1/2 -translate-y-1/2">
+                                            ₱
+                                        </span>
+                                        <Input
+                                            id="amount"
+                                            name="amount"
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            placeholder="0.00"
+                                            className="pl-6"
+                                            value={formData.amount === 0 ? '' : formData.amount}
+                                            disabled={isPending}
+                                            onChange={(e) => {
+                                                const numValue = e.target.value === '' ? 0 : Number(e.target.value);
+                                                setFormData({ ...formData, amount: numValue })
+                                            }}
+                                        />
+                                    </div>
+                                    {getErrorMessage("amount") && (
+                                        <p className="text-sm text-red-500">{getErrorMessage("amount")}</p>
+                                    )}
+                                </div>
+
+                                <div className="grid grid-cols-12 gap-4">
+                                    <div className="grid gap-2 col-span-6">
+                                        <Label htmlFor="source">Income Source</Label>
+                                        <Select
+                                            disabled={isPending}
+                                            name="source"
+                                            value={formData.source}
+                                            onValueChange={(value) => setFormData({ ...formData, source: value })}
+                                        >
+                                            <SelectTrigger className="cursor-pointer w-full">
+                                                <SelectValue placeholder="Select income source" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {incomeSources.map((income) => (
+                                                    <SelectItem
+                                                        key={income.id}
+                                                        className="cursor-pointer"
+                                                        value={income.name.toLowerCase()}
+                                                    >
+                                                        {income.name.charAt(0).toUpperCase() + income.name.slice(1)}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        {getErrorMessage("source") && (
+                                            <p className="text-sm text-red-500">{getErrorMessage("source")}</p>
+                                        )}
+                                    </div>
+
+                                    <div className="grid gap-2 col-span-6">
+                                        <Label htmlFor="frequency">Frequency</Label>
+                                        <Select
+                                            disabled={isPending}
+                                            name="frequency"
+                                            value={formData.frequency}
+                                            onValueChange={(value) => setFormData({ ...formData, frequency: value })}
+                                        >
+                                            <SelectTrigger className="cursor-pointer w-full">
+                                                <SelectValue placeholder="Select frequency" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem className="cursor-pointer" value="per-week">
+                                                    Per Week
+                                                </SelectItem>
+                                                <SelectItem className="cursor-pointer" value="per-month">
+                                                    Per Month
+                                                </SelectItem>
+                                                <SelectItem className="cursor-pointer" value="per-year">
+                                                    Per Year
+                                                </SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                        {getErrorMessage("frequency") && (
+                                            <p className="text-sm text-red-500">{getErrorMessage("frequency")}</p>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <DialogFooter>
+                                <Button
+                                    disabled={isPending}
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => setIsAddDialogOpen(false)}
+                                    className="cursor-pointer"
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    disabled={isPending}
+                                    type="button"
+                                    onClick={handleAddIncome}
+                                    className="cursor-pointer"
+                                >
+                                    {isPending ? (
+                                        <IconLoader2 className="animate-spin" size={18} />
+                                    ) : (
+                                        <IconPlus size={18} />
+                                    )}{" "}
+                                    <span>Add Income</span>
+                                </Button>
+                            </DialogFooter>
                         </DialogContent>
                     </Dialog>
                 </div>
 
                 {/* Income Items Grid */}
                 <div className="grid grid-cols-12 gap-4">
-                    {incomeItems.length === 0 ? (
+                    {optimisticIncomeData && optimisticIncomeData.length === 0 ? (
                         <div className="col-span-12 flex flex-col items-center justify-center py-12 text-center">
                             <IconCash size={64} className="text-muted-foreground mb-4" />
                             <h3 className="text-lg font-semibold mb-2">No income sources yet</h3>
@@ -478,17 +548,21 @@ export function IncomeManager() {
                             </Button>
                         </div>
                     ) : (
-                        incomeItems.map((item, index) => {
-                            const Icon = incomeIcons[item.source] || IconCash;
-                            const colors = incomeColors[item.source] || {
+                        optimisticIncomeData?.map((item, index: number) => {
+                            const Icon =
+                                incomeIcons[item.source.toLocaleLowerCase() as keyof typeof incomeIcons] ||
+                                IconCash;
+                            const colors = incomeColors[
+                                item.source.toLocaleLowerCase() as keyof typeof incomeColors
+                            ] || {
                                 color: "#1a64db",
                                 backgroundColor: "#e7effb",
                             };
 
                             return (
                                 <div
-                                    key={index}
-                                    className="group flex col-span-12 hover:bg-muted/50 transition-all duration-300 hover:shadow-md md:col-span-6 lg:col-span-4 items-center justify-between gap-4 bg-background border border-border p-2 lg:p-4 rounded-lg"
+                                    key={item.id}
+                                    className={`group ${item.id === editingItem?.id ? "opacity-50" : ""} flex col-span-12 hover:bg-muted/50 transition-all duration-300 hover:shadow-md md:col-span-6 lg:col-span-4 items-center justify-between gap-4 bg-background border border-border p-2 lg:p-4 rounded-lg`}
                                 >
                                     <div className="flex flex-row items-center gap-4 w-full">
                                         <div
@@ -499,9 +573,10 @@ export function IncomeManager() {
                                         </div>
 
                                         <div className="flex flex-col flex-1 min-w-0">
-                                            <p className="text-md font-semibold truncate">{item.name}</p>
+                                            <p className="text-md font-semibold truncate">{item.income_name}</p>
                                             <p className="text-sm text-muted-foreground capitalize">
-                                                {item.source} · {frequencyLabels[item.frequency]}
+                                                {item.source.charAt(0).toUpperCase() + item.source.slice(1)} ·{" "}
+                                                {frequencyLabels[item.frequency as keyof typeof frequencyLabels]}
                                             </p>
                                             <p className="text-lg font-bold text-green-600 mt-1">
                                                 ₱{item.amount.toLocaleString()}
@@ -514,7 +589,9 @@ export function IncomeManager() {
                                             variant="ghost"
                                             size="icon"
                                             className="cursor-pointer hover:bg-green-100 hover:text-green-600"
-                                            onClick={() => openViewDialog(item)}
+                                            onClick={() =>
+                                                openViewDialog({ ...item, date: item.createdAt.toISOString() })
+                                            }
                                         >
                                             <IconEye size={18} />
                                         </Button>
@@ -522,7 +599,9 @@ export function IncomeManager() {
                                             variant="ghost"
                                             size="icon"
                                             className="cursor-pointer hover:bg-blue-100 hover:text-blue-600"
-                                            onClick={() => openEditDialog(item)}
+                                            onClick={() =>
+                                                openEditDialog({ ...item, date: item.createdAt.toISOString() })
+                                            }
                                         >
                                             <IconEdit size={18} />
                                         </Button>
@@ -530,9 +609,17 @@ export function IncomeManager() {
                                             variant="ghost"
                                             size="icon"
                                             className="cursor-pointer hover:bg-red-100 hover:text-red-600"
-                                            onClick={() => handleDeleteIncome(item.id)}
+                                            disabled={isDeletePending}
+                                            onClick={() => {
+                                                setDeletingItemId(item.id);
+                                                handleDeleteIncome(item.id);
+                                            }}
                                         >
-                                            <IconTrash size={18} />
+                                            {isDeletePending && item.id === deletingItemId ? (
+                                                <IconLoader2 className="animate-spin" size={18} />
+                                            ) : (
+                                                <IconTrash size={18} />
+                                            )}
                                         </Button>
                                     </div>
                                 </div>
@@ -543,113 +630,31 @@ export function IncomeManager() {
             </div>
 
             {/* Edit Dialog */}
-            <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+            <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
+                if (!open) {
+                    setIsEditDialogOpen(false);
+                    setEditingItem(null);
+                    resetForm();
+                }
+            }}>
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Edit Income</DialogTitle>
                         <DialogDescription>Update the details of your income source below.</DialogDescription>
                     </DialogHeader>
 
-                    <div className="grid gap-4 py-4">
-                        <div className="grid gap-2">
-                            <Label htmlFor="edit-name">Income Name</Label>
-                            <Input
-                                id="edit-name"
-                                placeholder="e.g., Main Job Salary, Freelance Project"
-                                value={formData.name}
-                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                            />
-                            {getErrorMessage("name") && (
-                                <p className="text-sm text-red-500">{getErrorMessage("name")}</p>
-                            )}
-                        </div>
-
-                        <div className="grid gap-2">
-                            <Label htmlFor="edit-amount">Amount</Label>
-                            <div className="relative">
-                                <span className="text-muted-foreground text-sm absolute left-2 top-1/2 -translate-y-1/2">
-                                    ₱
-                                </span>
-                                <Input
-                                    id="edit-amount"
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    placeholder="0.00"
-                                    className="pl-6"
-                                    value={formData.amount}
-                                    onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                                />
-                            </div>
-                            {getErrorMessage("amount") && (
-                                <p className="text-sm text-red-500">{getErrorMessage("amount")}</p>
-                            )}
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="grid gap-2">
-                                <Label htmlFor="edit-source">Income Source</Label>
-                                <Select
-                                    value={formData.source}
-                                    onValueChange={(value) => setFormData({ ...formData, source: value })}
-                                >
-                                    <SelectTrigger className="cursor-pointer">
-                                        <SelectValue placeholder="Select income source" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem className="cursor-pointer" value="salary">
-                                            Salary
-                                        </SelectItem>
-                                        <SelectItem className="cursor-pointer" value="freelance">
-                                            Freelance
-                                        </SelectItem>
-                                        <SelectItem className="cursor-pointer" value="business">
-                                            Business
-                                        </SelectItem>
-                                        <SelectItem className="cursor-pointer" value="investment">
-                                            Investment
-                                        </SelectItem>
-                                        <SelectItem className="cursor-pointer" value="other">
-                                            Other
-                                        </SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                {getErrorMessage("source") && (
-                                    <p className="text-sm text-red-500">{getErrorMessage("source")}</p>
-                                )}
-                            </div>
-
-                            <div className="grid gap-2">
-                                <Label htmlFor="edit-frequency">Frequency</Label>
-                                <Select
-                                    value={formData.frequency}
-                                    onValueChange={(value) => setFormData({ ...formData, frequency: value })}
-                                >
-                                    <SelectTrigger className="cursor-pointer">
-                                        <SelectValue placeholder="Select frequency" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem className="cursor-pointer" value="per-week">
-                                            Per Week
-                                        </SelectItem>
-                                        <SelectItem className="cursor-pointer" value="per-month">
-                                            Per Month
-                                        </SelectItem>
-                                        <SelectItem className="cursor-pointer" value="per-year">
-                                            Per Year
-                                        </SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                {getErrorMessage("frequency") && (
-                                    <p className="text-sm text-red-500">{getErrorMessage("frequency")}</p>
-                                )}
-                            </div>
-                        </div>
-                    </div>
+                    <EditIncomeDialog
+                        getErrorMessage={getErrorMessage}
+                        formData={formData}
+                        setFormData={setFormData}
+                    />
 
                     <DialogFooter>
                         <Button
                             variant="outline"
+                            type="button"
+                            className="cursor-pointer"
+                            disabled={isEditPending}
                             onClick={() => {
                                 setIsEditDialogOpen(false);
                                 setEditingItem(null);
@@ -658,8 +663,13 @@ export function IncomeManager() {
                         >
                             Cancel
                         </Button>
-                        <Button className="cursor-pointer" onClick={handleEditIncome}>
-                            Update Income
+                        <Button className="cursor-pointer" type="button" onClick={handleEditIncome} disabled={isEditPending}>
+                            {isEditPending ? (
+                                <IconLoader2 className="animate-spin" size={18} />
+                            ) : (
+                                <IconEdit size={18} />
+                            )}
+                            <span>Update Income</span>
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -670,135 +680,16 @@ export function IncomeManager() {
                 <DialogContent className="min-w-2/5">
                     <DialogHeader>
                         <DialogTitle>Income Details</DialogTitle>
-                        <DialogDescription>
-                            View the details of your income source.
-                        </DialogDescription>
+                        <DialogDescription>View the details of your income source.</DialogDescription>
                     </DialogHeader>
 
-                    {viewingItem && (
-                        <div className="space-y-6 py-4 grid grid-cols-12 items-center">
-                            <div className="flex flex-col items-start gap-4 col-span-6">
-                                <div className="flex flex-row items-center gap-4">
-                                    <div
-                                        style={{
-                                            backgroundColor: incomeColors[viewingItem.source]?.backgroundColor || "#e7effb"
-                                        }}
-                                        className="rounded-xl p-3 size-16 flex items-center justify-center"
-                                    >
-                                        {(() => {
-                                            const Icon = incomeIcons[viewingItem.source] || IconCash;
-                                            return <Icon size={32} color={incomeColors[viewingItem.source]?.color || "#1a64db"} />;
-                                        })()}
-                                    </div>
-                                    <div>
-                                        <h3 className="text-xl font-bold">{viewingItem.name}</h3>
-                                        <p className="text-sm text-muted-foreground capitalize">
-                                            {viewingItem.source}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <div className="flex flex-col gap-4">
-                                    <div className="space-y-1">
-                                        <p className="text-sm text-muted-foreground">Amount</p>
-                                        <p className="text-2xl font-bold text-green-600">
-                                            ₱{viewingItem.amount.toLocaleString()}
-                                        </p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="text-sm text-muted-foreground">Frequency</p>
-                                        <p className="text-lg font-semibold">
-                                            {frequencyLabels[viewingItem.frequency]}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-1">
-                                    <p className="text-sm text-muted-foreground">Date Added</p>
-                                    <p className="text-sm font-medium">
-                                        {new Date(viewingItem.date).toLocaleDateString('en-US', {
-                                            year: 'numeric',
-                                            month: 'long',
-                                            day: 'numeric',
-                                            hour: '2-digit',
-                                            minute: '2-digit'
-                                        })}
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="flex flex-col items-start gap-4 col-span-6">
-                                <div className="pt-4 border-t w-full">
-                                    <p className="text-sm text-muted-foreground mb-2">Projections</p>
-
-                                    <div className="space-y-2 w-full">
-                                        {viewingItem.frequency !== "per-week" && (
-                                            <div className="flex flex-row justify-between w-full">
-                                                <span className="text-sm">Per Week</span>
-                                                <span className="font-semibold">
-                                                    ₱{(viewingItem.frequency === "per-month" ? viewingItem.amount / 4 : viewingItem.amount / 52).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                                                </span>
-                                            </div>
-                                        )}
-                                        {viewingItem.frequency !== "per-month" && (
-                                            <div className="flex justify-between w-full">
-                                                <span className="text-sm">Per Month</span>
-                                                <span className="font-semibold">
-                                                    ₱{(viewingItem.frequency === "per-week" ? viewingItem.amount * 4 : viewingItem.amount / 12).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                                                </span>
-                                            </div>
-                                        )}
-                                        {viewingItem.frequency !== "per-year" && (
-                                            <div className="flex justify-between w-full">
-                                                <span className="text-sm">Per Year</span>
-                                                <span className="font-semibold">
-                                                    ₱{(viewingItem.frequency === "per-week" ? viewingItem.amount * 52 : viewingItem.amount * 12).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                                                </span>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-
-
-
-                                <div className="pt-4 border-t col-span-6 w-full">
-                                    <p className="text-sm text-muted-foreground mb-2">Expenses</p>
-
-                                    <div className="space-y-2 w-full">
-                                        <div className="flex justify-between w-full">
-                                            <span className="text-sm">Travel</span>
-                                            <span className="font-semibold">
-                                                10%
-                                            </span>
-                                        </div>
-                                        <div className="flex justify-between w-full">
-                                            <span className="text-sm">Food</span>
-                                            <span className="font-semibold">
-                                                10%
-                                            </span>
-                                        </div>
-
-                                        <div className="flex justify-between w-full">
-                                            <span className="text-sm">Entertainment</span>
-                                            <span className="font-semibold">
-                                                10%
-                                            </span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                            <span className="text-sm">Other</span>
-                                            <span className="font-semibold">
-                                                10%
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
+                    {viewingItem && <ViewIncomeDialog viewingItem={viewingItem} />}
 
                     <DialogFooter>
                         <Button
                             variant="outline"
+                            type="button"
+                            className="cursor-pointer"
                             onClick={() => {
                                 setIsViewDialogOpen(false);
                                 setViewingItem(null);
@@ -808,6 +699,7 @@ export function IncomeManager() {
                         </Button>
                         <Button
                             className="cursor-pointer"
+                            type="button"
                             onClick={() => {
                                 if (viewingItem) {
                                     setIsViewDialogOpen(false);

@@ -3,6 +3,13 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { LoginForm } from "@/app/login/login-form";
 import { auth } from "@/lib/auth";
+import { Metadata } from "next";
+
+
+const metadata: Metadata = {
+	title: "Login - Budgety",
+	description: "Login to your Budgety account",
+};
 
 export default async function LoginPage() {
 	// If user already has a session, redirect away from login

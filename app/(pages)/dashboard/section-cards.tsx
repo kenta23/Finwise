@@ -1,7 +1,9 @@
 "use client";
 
-import { IconTrendingDown, IconTrendingUp } from "@tabler/icons-react";
+import { IconTrendingUp } from "@tabler/icons-react";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { getUserInfo } from "@/app/actions/income";
 import { Badge } from "@/components/ui/badge";
 import {
 	Card,
@@ -15,49 +17,42 @@ import {
 export function SectionCards() {
 	const [totalIncome, setTotalIncome] = useState<number>(0);
 	const [totalSavings, setTotalSavings] = useState<number>(0);
-	// const expenses = localStorage.getItem("expenses");
+	const [totalExpenses, setTotalExpenses] = useState<number>(0);
+	const [remainingBalance, setRemainingBalance] = useState<number>(0);
+	const { data, isLoading, isError, isFetching, isSuccess } = useQuery({
+		queryKey: ["userInfo"],
+		queryFn: async () => await getUserInfo(),
+	});
 
-	const updateIncome = () => {
-		const income = localStorage.getItem("income");
-		const total = income
-			? JSON.parse(income).reduce((acc: number, curr: { amount: number }) => acc + curr.amount, 0)
-			: 0;
-		setTotalIncome(total);
-	};
+	console.log("incomeQuery", data?.data, isLoading, isError);
 
-	const updateSavings = () => {
-		const savings = localStorage.getItem("savings");
-		const total = savings
-			? JSON.parse(savings).reduce((acc: number, curr: { currentAmount: number }) => acc + curr.currentAmount, 0)
-			: 0;
-		setTotalSavings(total);
-	};
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: <explanation>
 	useEffect(() => {
-		updateIncome();
-		updateSavings();
+		if (data?.data && !data.error) {
+			// getUserInfo returns a single user object, not an array
+			const userInfo = data.data;
 
-		// Listen for income updates
-		const handleIncomeUpdate = () => {
-			updateIncome();
-		};
+			// Calculate values directly from data to avoid stale state issues
+			const calculatedIncome = userInfo.incomes?.reduce((acc: number, curr: { amount: number }) => acc + curr.amount, 0) || 0;
+			const calculatedExpenses = userInfo.expenses?.reduce((acc: number, curr: { amount: number }) => acc + curr.amount, 0) || 0;
+			const calculatedSavings = userInfo.savings?.reduce((acc: number, curr: { currentAmount: number }) => acc + curr.currentAmount, 0) || 0;
+			const calculatedBalance = calculatedIncome - calculatedExpenses - calculatedSavings;
 
-		// Listen for savings updates
-		const handleSavingsUpdate = () => {
-			updateSavings();
-		};
+			// Set all state values at once
+			setTotalIncome(calculatedIncome);
+			setTotalExpenses(calculatedExpenses);
+			setTotalSavings(calculatedSavings);
+			setRemainingBalance(calculatedBalance);
+		}
 
-		window.addEventListener("incomeUpdated", handleIncomeUpdate);
-		window.addEventListener("savingsUpdated", handleSavingsUpdate);
+		console.log('fetching');
 
-		return () => {
-			window.removeEventListener("incomeUpdated", handleIncomeUpdate);
-			window.removeEventListener("savingsUpdated", handleSavingsUpdate);
-		};
-	}, []);
+	}, [data, isSuccess]);
 
-	console.log("totalIncome", totalIncome);
+	console.log("remainingBalance", remainingBalance);
+
+
 
 	return (
 		<div className="*:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card grid grid-cols-1 gap-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:shadow-xs @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
@@ -89,7 +84,7 @@ export function SectionCards() {
 				<CardHeader>
 					<CardDescription>Expenses</CardDescription>
 					<CardTitle className="text-xl font-bold tabular-nums @[250px]/card:text-3xl">
-						$1,250.00
+						₱{totalExpenses.toLocaleString()}
 					</CardTitle>
 
 					<CardAction>
@@ -136,13 +131,12 @@ export function SectionCards() {
 				</CardFooter>
 			</Card>
 
-
 			{/** YOUR REMAINING BALANCE */}
 			<Card className="@container/card">
 				<CardHeader>
 					<CardDescription>Your Remaining Balance</CardDescription>
 					<CardTitle className="text-xl font-bold tabular-nums @[250px]/card:text-3xl">
-						₱{totalIncome.toLocaleString()}
+						₱{remainingBalance.toLocaleString()}
 					</CardTitle>
 					<CardAction>
 						<Badge variant="outline">

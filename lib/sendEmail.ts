@@ -1,11 +1,10 @@
 import "dotenv/config";
 import { EmailParams, MailerSend, Recipient, Sender } from "mailersend";
+import { Resend } from 'resend';
 
-const mailerSend = new MailerSend({
-	apiKey: process.env.MAILERSEND_API_KEY!,
-});
+const resendAPi = process.env.RESEND_API_KEY!;
+const resend = new Resend(resendAPi);
 
-const sentFrom = new Sender("noreply@test-86org8ekok0gew13.mlsender.net", "Budgety");
 
 interface SendEmailOptions {
 	to: string;
@@ -13,6 +12,30 @@ interface SendEmailOptions {
 	html?: string;
 	text?: string;
 }
+
+
+
+export async function sendEmailWithResend({ to, subject, html, text }: SendEmailOptions) { 
+  const { data, error } = await resend.emails.send({
+    from: 'onboarding@resend.dev',
+    to,
+    subject,
+    html: html as string,
+    text: text as string,
+  });
+  
+  console.log(data, error);
+
+  return data 
+}
+
+const mailerSend = new MailerSend({
+	apiKey: process.env.MAILERSEND_API_KEY!,
+});
+
+const sentFrom = new Sender("noreply@test-86org8ekok0gew13.mlsender.net", "Budgety");
+
+
 
 export async function sendEmail({ to, subject, html, text }: SendEmailOptions) {
 	try {
@@ -142,7 +165,7 @@ export async function sendVerificationEmail(email: string, verificationUrl: stri
     © ${new Date().getFullYear()} Budgety. All rights reserved.
   `;
 
-	return sendEmail({
+	return sendEmailWithResend({
 		to: email,
 		subject: "Verify Your Email Address - Budgety",
 		html: htmlContent,

@@ -2,6 +2,7 @@
 
 import { type Icon, IconCirclePlusFilled, IconMail } from "@tabler/icons-react";
 import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
 	SidebarGroup,
@@ -33,13 +34,14 @@ export function NavMain({
 }) {
 	const pathname = usePathname();
 	const router = useRouter();
+	const [isOpen, setIsOpen] = useState<boolean>(false);
 
 	return (
 		<SidebarGroup>
 			<SidebarGroupContent className="flex flex-col gap-2">
 				<SidebarMenu>
 					<SidebarMenuItem className="flex items-center gap-2">
-						<Dialog>
+						<Dialog open={isOpen} onOpenChange={setIsOpen}>
 							<DialogTrigger asChild>
 								<SidebarMenuButton
 									tooltip="Quick Create"
@@ -55,7 +57,7 @@ export function NavMain({
 									<DialogTitle>Quick Create</DialogTitle>
 									<DialogDescription>Add a new income or expense to your budget.</DialogDescription>
 								</DialogHeader>
-								<QuickAddDialog />
+								<QuickAddDialog isOpen={isOpen} setIsOpen={setIsOpen} />
 							</DialogContent>
 						</Dialog>
 

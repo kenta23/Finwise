@@ -48,6 +48,7 @@ type ExpenseItem = {
     description: string;
     date: string;
     notes?: string;
+    incomeId?: string;
 };
 
 const expenseSchema = z.object({
@@ -64,6 +65,22 @@ export function ExpenseManager() {
         categoryId: cat.id,
         categoryName: cat.name,
     }));
+    const [userIncomes] = useState([{
+        id: "1",
+        name: "Salary",
+    }, {
+        id: "2",
+        name: "Freelance",
+    }, {
+        id: "3",
+        name: "Business",
+    }, {
+        id: "4",
+        name: "Investment",
+    }, {
+        id: "5",
+        name: "Other",
+    }]);
     const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
     const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
@@ -77,6 +94,7 @@ export function ExpenseManager() {
         categoryId: "",
         description: "",
         notes: "",
+        incomeId: "",
     });
     const [errors, setErrors] = useState<z.ZodError | null>(null);
 
@@ -105,6 +123,7 @@ export function ExpenseManager() {
             categoryId: "",
             description: "",
             notes: "",
+            incomeId: "",
         });
         setErrors(null);
     };
@@ -206,6 +225,7 @@ export function ExpenseManager() {
             categoryId: expense.categoryId.toString(),
             description: expense.description,
             notes: expense.notes || "",
+            incomeId: expense.incomeId || "",
         });
         setIsEditDialogOpen(true);
         setErrors(null);
@@ -433,6 +453,35 @@ export function ExpenseManager() {
                                     )}
                                 </div>
 
+
+                                <div className="grid gap-2">
+                                    <Label htmlFor="edit-category">Funds to Use</Label>
+                                    <Select
+                                        value={formData.incomeId}
+                                        onValueChange={(value) => setFormData({ ...formData, incomeId: value })}
+                                    >
+                                        <SelectTrigger className="cursor-pointer">
+                                            <SelectValue placeholder="Select Fund from your Income" />
+                                        </SelectTrigger>
+
+                                        <SelectContent>
+                                            {userIncomes.map((income) => (
+                                                <SelectItem
+                                                    key={income.id}
+                                                    value={income.id.toString()}
+                                                    className="cursor-pointer"
+                                                >
+                                                    {income.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+
+                                    {getErrorMessage("incomeId") && (
+                                        <p className="text-sm text-red-500">{getErrorMessage("incomeId")}</p>
+                                    )}
+                                </div>
+
                                 <div className="grid gap-2">
                                     <Label htmlFor="notes">Notes (Optional)</Label>
                                     <Textarea
@@ -632,6 +681,8 @@ export function ExpenseManager() {
                                 <p className="text-sm text-red-500">{getErrorMessage("categoryId")}</p>
                             )}
                         </div>
+
+
 
                         <div className="grid gap-2">
                             <Label htmlFor="edit-notes">Notes (Optional)</Label>
