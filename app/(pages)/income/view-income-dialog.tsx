@@ -1,17 +1,11 @@
 import { IconCash } from "@tabler/icons-react";
 import { frequencyLabels, incomeColors, incomeIcons } from "@/data";
+import type { incomeItem } from "@/types";
 
 export function ViewIncomeDialog({
     viewingItem,
 }: {
-    viewingItem: {
-        id?: string;
-        amount: number;
-        source: string;
-        frequency: string;
-        income_name: string;
-        date?: string;
-    };
+    viewingItem: incomeItem;
 }) {
     return (
         <div className="space-y-6 py-4 grid grid-cols-12 items-center">
@@ -19,20 +13,20 @@ export function ViewIncomeDialog({
                 <div className="flex flex-row items-center gap-4">
                     <div
                         style={{
-                            backgroundColor: incomeColors[viewingItem.source]?.backgroundColor || "#e7effb",
+                            backgroundColor: incomeColors[viewingItem.incomeSource?.name.toLowerCase() as keyof typeof incomeColors]?.backgroundColor || "#e7effb",
                         }}
                         className="rounded-xl p-3 size-16 flex items-center justify-center"
                     >
                         {(() => {
-                            const Icon = incomeIcons[viewingItem.source] || IconCash;
+                            const Icon = incomeIcons[viewingItem.incomeSource?.name.toLowerCase() as keyof typeof incomeIcons] || IconCash;
                             return (
-                                <Icon size={32} color={incomeColors[viewingItem.source]?.color || "#1a64db"} />
+                                <Icon size={32} color={incomeColors[viewingItem.incomeSource?.name.toLowerCase() as keyof typeof incomeColors]?.color || "#1a64db"} />
                             );
                         })()}
                     </div>
                     <div>
                         <h3 className="text-xl font-bold">{viewingItem.income_name}</h3>
-                        <p className="text-sm text-muted-foreground capitalize">{viewingItem.source}</p>
+                        <p className="text-sm text-muted-foreground capitalize">{viewingItem.incomeSource ? viewingItem.incomeSource?.name?.charAt(0).toUpperCase() + viewingItem.incomeSource?.name?.slice(1) : "N/A"}</p>
                     </div>
                 </div>
 
@@ -45,14 +39,14 @@ export function ViewIncomeDialog({
                     </div>
                     <div className="space-y-1">
                         <p className="text-sm text-muted-foreground">Frequency</p>
-                        <p className="text-lg font-semibold">{frequencyLabels[viewingItem.frequency]}</p>
+                        <p className="text-lg font-semibold">{frequencyLabels.find((label) => label.value === viewingItem.frequency.toString())?.label}</p>
                     </div>
                 </div>
 
                 <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">Date Added</p>
                     <p className="text-sm font-medium">
-                        {new Date(viewingItem?.date || "").toLocaleDateString("en-US", {
+                        {new Date(viewingItem.createdAt).toLocaleDateString("en-US", {
                             year: "numeric",
                             month: "long",
                             day: "numeric",

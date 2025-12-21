@@ -36,7 +36,7 @@ export const sidebarItems = {
 			icon: IconCash,
 		},
 		{
-			title: "Expenses List",
+			title: "Expenses",
 			url: "/expenses",
 			icon: IconListDetails,
 		},

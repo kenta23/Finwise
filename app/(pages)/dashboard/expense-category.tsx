@@ -1,13 +1,14 @@
 "use client";
 
 import { IconEdit, IconEye, IconPlus, IconTrash } from "@tabler/icons-react";
+import { useQuery } from "@tanstack/react-query";
 import { Check } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import z from "zod";
-import { categories, type categoryType } from "../../../data";
-import { useQuery } from "@tanstack/react-query";
-import { getExpenses } from "@/app/actions/expenses";
+import { getCategories, getExpenses } from "@/app/actions/expenses";
+import type { categoryType } from "@/types";
+import { categories } from "../../../data";
 
 const schema = z.object({
 	categoryId: z
@@ -22,31 +23,19 @@ const schema = z.object({
 
 export default function ExpenseCategory() {
 	const [error, setError] = useState<z.ZodError | null>(null);
-	const { data: categoriesData, isLoading, isError } = useQuery({
+
+	const {
+		data: categoriesData,
+		isLoading,
+		isError,
+	} = useQuery({
 		queryKey: ["expenses-categories"],
-		queryFn: async () => getExpenses(),
-	})
-
-
-	// const getCategories = useCallback(() => {
-	// 	const getItem = localStorage.getItem("selectedCategory");
-	// 	if (getItem) {
-	// 		const parsedItem = JSON.parse(getItem) as { categoryId: number; categoryName: string }[];
-	// 		setFetchCategories(parsedItem);
-	// 	}
-	// 	return [];
-	// }, []);
-
-	// useEffect(() => {
-	// 	getCategories();
-	// }, [getCategories]);
-
-
-
-
+		queryFn: async () => getCategories(),
+	});
 
 	console.log("error issues", error);
 
+	console.log("categoriesData", categoriesData);
 
 	if (isLoading) {
 		return (
@@ -75,29 +64,38 @@ export default function ExpenseCategory() {
 				{/**Fetch Categories here... */}
 				<div className="col-span-12 gap-4 grid grid-cols-12 w-full">
 					{categories.map((item: categoryType, index: number) => {
-
 						// Safely map categories data with default empty array
-						const filteredCategories = categoriesData?.data?.map((item: any) => {
-							return {
-								category: item.category,
-								amount: item.amount,
-							}
-						}) || [];
+						// const filteredCategories =
+						// 	categoriesData?.data?.map((item: any) => {
+						// 		return {
+						// 			category: item.category,
+						// 			amount: item.amount,
+						// 		};
+						// 	}) || [];
 
-						const category = categories.find((cat) => cat.name === item.name);
 
-						if (!category) return null;
+						const categories = categoriesData?.data?.find((cat: { name: string }) => cat.name === item.name)
+
+						if (!categories) return null;
 
 						const categoriesMatched = {
-							icon: category.icon,
-							backgroundColor: category.backgroundColor,
-							color: category.color,
+							icon: item.icon,
+							backgroundColor: item.backgroundColor,
+							color: item.color,
 						};
 
-						const categoryAmount = filteredCategories.find((cat: any) => cat.category === item.name.toLowerCase())?.amount || 0;
-						const totalExpenses = filteredCategories.reduce((acc: number, curr: any) => acc + curr.amount, 0);
+						const categoryAmount = categories?.expenses.reduce((acc: number, curr: { amount: number }) => acc + curr.amount, 0) || 0;
 
+						const getCategoryTotal = (category: { expenses: { amount: number }[] }) =>
+							category.expenses.reduce((sum, expense) => sum + expense.amount, 0);
+
+						const totalExpenses = categoriesData?.data?.reduce((sum, category) => sum + getCategoryTotal(category), 0) ?? 0;
+
+
+
+						console.log("totalExpenses", totalExpenses);
 						const percentage = totalExpenses > 0 ? (categoryAmount / totalExpenses) * 100 : 0;
+
 						return (
 							//category name, % of total expenses, total expenses
 							<div
@@ -121,11 +119,15 @@ export default function ExpenseCategory() {
 
 									<div className="flex flex-col flex-1">
 										<p className="text-md font-medium">{item.name}</p>
-										<p className="text-sm font-normal text-gray-500">{percentage.toFixed(1)}% of total expenses</p>
+										<p className="text-sm font-normal text-gray-500">
+											{percentage.toFixed(1)}% of total expenses
+										</p>
 									</div>
 
 									<div className="flex shrink-0 items-center gap-2">
-										<h6 className="text-md font-semibold text-foreground">₱{categoryAmount.toLocaleString()}</h6>
+										<h6 className="text-md font-semibold text-foreground">
+											₱{categoryAmount.toLocaleString()}
+										</h6>
 									</div>
 								</div>
 							</div>
@@ -133,7 +135,6 @@ export default function ExpenseCategory() {
 					})}
 				</div>
 			</div>
-
 		</div>
 	);
 }

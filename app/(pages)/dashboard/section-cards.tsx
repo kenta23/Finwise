@@ -3,7 +3,7 @@
 import { IconTrendingUp } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { getUserInfo } from "@/app/actions/income";
+import { getSummary } from "@/app/actions/income";
 import { Badge } from "@/components/ui/badge";
 import {
 	Card,
@@ -20,8 +20,8 @@ export function SectionCards() {
 	const [totalExpenses, setTotalExpenses] = useState<number>(0);
 	const [remainingBalance, setRemainingBalance] = useState<number>(0);
 	const { data, isLoading, isError, isFetching, isSuccess } = useQuery({
-		queryKey: ["userInfo"],
-		queryFn: async () => await getUserInfo(),
+		queryKey: ["summary"],
+		queryFn: async () => await getSummary(),
 	});
 
 	console.log("incomeQuery", data?.data, isLoading, isError);
@@ -53,6 +53,25 @@ export function SectionCards() {
 	console.log("remainingBalance", remainingBalance);
 
 
+	const remainingBalanceFn = () => {
+		if (remainingBalance > 0) {
+			return (<>
+				<div className="line-clamp-1 flex gap-2 font-medium">
+					<p className="text-green-500">Good financial position</p>
+				</div>
+				<div className="text-muted-foreground">You have a positive remaining balance</div>
+			</>)
+		}
+		if (remainingBalance <= 0) {
+			return (<>
+				<div className="line-clamp-1 flex gap-2 font-medium">
+					<p className="text-red-500">Negative remaining balance</p>
+				</div>
+				<div className="text-muted-foreground">Be careful, you are in a bad financial position</div>
+			</>)
+		}
+		return null;
+	}
 
 	return (
 		<div className="*:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card grid grid-cols-1 gap-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:shadow-xs @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
@@ -146,10 +165,7 @@ export function SectionCards() {
 					</CardAction>
 				</CardHeader>
 				<CardFooter className="flex-col items-start gap-1.5 text-sm">
-					<div className="line-clamp-1 flex gap-2 font-medium">
-						<p>You spent half of your income</p>
-					</div>
-					<div className="text-muted-foreground">Meets growth projections</div>
+					{remainingBalanceFn()}
 				</CardFooter>
 			</Card>
 		</div>

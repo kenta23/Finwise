@@ -18,7 +18,7 @@ import {
 import { Input } from "../../../components/ui/input";
 
 import { Label } from "../../../components/ui/label";
-import { categories, type categoryType } from "../../../data";
+import { categories } from "../../../data";
 
 const schema = z.object({
     categoryId: z
@@ -79,7 +79,7 @@ export default function AddCategory() {
     function handleSubmitCategory() {
         console.log("selectedCategory", selectedCategory);
 
-        const category: categoryType | undefined = categories.find(
+        const category = categories.find(
             (item) => item.id === selectedCategory
         );
 
@@ -162,7 +162,7 @@ export default function AddCategory() {
     }
 
     function handleEditCategory() {
-        const category: categoryType | undefined = categories.find(
+        const category = categories.find(
             (item) => item.id === editSelectedCategory
         );
 

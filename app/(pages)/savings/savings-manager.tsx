@@ -37,6 +37,8 @@ import {
 } from "../../../components/ui/select";
 import { Textarea } from "../../../components/ui/textarea";
 import { savingsSchema, SavingsItem, savingsIcons, savingsColors, savingsTypeLabels } from './data';
+import { useQuery } from "@tanstack/react-query";
+import { getSavings } from "@/app/actions/savings";
 
 export function SavingsManager() {
     const [savingsItems, setSavingsItems] = useState<SavingsItem[]>([]);
@@ -45,6 +47,12 @@ export function SavingsManager() {
     const [editingItem, setEditingItem] = useState<SavingsItem | null>(null);
     const [viewingItem, setViewingItem] = useState<SavingsItem | null>(null);
     const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+    const { data: savingsData, isLoading, isError } = useQuery({
+        queryKey: ["savings"],
+        queryFn: async () => await getSavings()
+    })
+
+    console.log("savingsData", savingsData);
 
     const [formData, setFormData] = useState({
         name: "",
@@ -57,17 +65,17 @@ export function SavingsManager() {
     });
     const [errors, setErrors] = useState<z.ZodError | null>(null);
 
-    useEffect(() => {
-        const stored = localStorage.getItem("savings");
-        if (stored) {
-            try {
-                const parsed = JSON.parse(stored) as SavingsItem[];
-                setSavingsItems(parsed);
-            } catch (error) {
-                console.error("Error parsing savings items:", error);
-            }
-        }
-    }, []);
+    // useEffect(() => {
+    //     const stored = localStorage.getItem("savings");
+    //     if (stored) {
+    //         try {
+    //             const parsed = JSON.parse(stored) as SavingsItem[];
+    //             setSavingsItems(parsed);
+    //         } catch (error) {
+    //             console.error("Error parsing savings items:", error);
+    //         }
+    //     }
+    // }, []);
 
     const saveSavingsItems = (items: SavingsItem[]) => {
         localStorage.setItem("savings", JSON.stringify(items));
@@ -178,16 +186,16 @@ export function SavingsManager() {
     };
 
     const calculateTotals = () => {
-        const totalCurrent = savingsItems.reduce((acc, item) => acc + item.currentAmount, 0);
-        const totalGoal = savingsItems.reduce((acc, item) => acc + item.goalAmount, 0);
+        const totalCurrent = savingsData?.data?.reduce((acc: number, item: SavingsItem) => acc + item.currentAmount, 0);
+        const totalGoal = savingsData?.data?.reduce((acc: number, item: SavingsItem) => acc + item.goalAmount, 0);
         const totalRemaining = totalGoal - totalCurrent;
         const overallProgress = totalGoal > 0 ? (totalCurrent / totalGoal) * 100 : 0;
 
         return {
-            totalCurrent,
-            totalGoal,
-            totalRemaining,
-            overallProgress,
+            totalCurrent: totalCurrent || 0,
+            totalGoal: totalGoal || 0,
+            totalRemaining: totalRemaining || 0,
+            overallProgress: overallProgress || 0,
         };
     };
 
@@ -434,7 +442,7 @@ export function SavingsManager() {
 
                 {/* Savings Items Grid */}
                 <div className="grid grid-cols-12 gap-4">
-                    {savingsItems.length === 0 ? (
+                    {savingsData?.data?.length === 0 ? (
                         <div className="col-span-12 flex flex-col items-center justify-center py-12 text-center">
                             <IconPigMoney size={64} className="text-muted-foreground mb-4" />
                             <h3 className="text-lg font-semibold mb-2">No savings accounts yet</h3>
@@ -447,7 +455,7 @@ export function SavingsManager() {
                             </Button>
                         </div>
                     ) : (
-                        savingsItems.map((item) => {
+                        savingsData?.data?.map((item: SavingsItem) => {
                             const Icon = savingsIcons[item.type] || IconWallet;
                             const colors = savingsColors[item.type] || {
                                 color: "#1a64db",

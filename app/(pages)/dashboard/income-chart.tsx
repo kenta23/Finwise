@@ -1,8 +1,10 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import { TrendingUp } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Pie, PieChart } from "recharts";
+import { getIncome } from "@/app/actions/income";
 import {
 	Card,
 	CardContent,
@@ -17,8 +19,6 @@ import {
 	ChartTooltip,
 	ChartTooltipContent,
 } from "@/components/ui/chart";
-import { useQuery } from "@tanstack/react-query";
-import { getIncome } from "@/app/actions/income";
 
 export const description = "A simple pie chart";
 
@@ -57,57 +57,45 @@ const chartConfig = {
 	},
 } satisfies ChartConfig;
 
-
-
-type incomeType = {
-	source: string;
-	id: string;
-	amount: number;
-	frequency: string;
-	income_name: string;
-	createdAt: Date;
-	updatedAt: Date;
-	userId: string;
-}[]
-
-
 export function IncomeChart() {
 	// const [incomeData, setIncomeData] = useState<
 	// 	{ source: string; amount: number; frequency: string }[]
 	// >([]);
 
-	const { data: incomeData, isLoading, isError } = useQuery({
+	const {
+		data: incomeData,
+		isLoading,
+		isError,
+	} = useQuery({
 		queryKey: ["income-charts-data"],
 		queryFn: async () => await getIncome(),
-	})
-
+	});
 
 	console.log("incomeData", incomeData);
 
-	const mergedData = incomeData?.data?.reduce(
-		(acc, curr) => {
-			const existingSource = acc?.find((source: { source: string }) => source.source === curr.source);
+	const mergedData =
+		incomeData?.data?.reduce<Record<string, { source: string; amount: number }>>((acc, curr) => {
+			// Prefer related income source name, fall back to existing income_name, else unknown
+			const source =
+				curr.incomeSource?.name?.trim() ||
+				curr.income_name?.trim() ||
+				"Unknown source";
+			const key = source.toLowerCase();
 
-			if (existingSource) {
-				existingSource.amount += curr.amount;
+			if (acc[key]) {
+				acc[key].amount += curr.amount;
 			} else {
-				acc.push(curr);
+				acc[key] = { source, amount: curr.amount };
 			}
+
 			return acc;
-		},
-		[] as incomeType
-	) || [];
+		}, {}) || {};
 
-	console.log("mergedData", mergedData);
-
-	const chartData = mergedData?.map((item: { source: string; amount: number }) => ({
-		source: item.source, // Capitalize first letter
-		amount: item.amount,
-		fill: sourceColorMap[item.source] || "#6b7280", // Default gray if not found
+	const chartData = Object.values(mergedData).map(({ source, amount }) => ({
+		source,
+		amount,
+		fill: sourceColorMap[source.toLowerCase()] || "#6b7280", // Default gray if not found
 	}));
-
-	console.log("chartData", chartData);
-	console.log("incomeData", incomeData);
 
 	return (
 		<Card className="flex flex-col">

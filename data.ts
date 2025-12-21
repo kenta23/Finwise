@@ -10,25 +10,8 @@ import {
 	IconPlus,
 	IconReceipt,
 } from "@tabler/icons-react";
+import { Frequency, type incomeType } from "./types";
 
-
-export enum Frequency {
-	PER_WEEK = "per-week",
-	PER_MONTH = "per-month",
-	PER_YEAR = "per-year",
-}
-
-export type incomeSourcesType = {
-	income_name: string;
-	frequency: Frequency;
-	source: string;
-	amount: number;
-};
-export type expenseType = {
-	amount: number;
-	category: string;
-	description: string;
-};
 
 export const categories = [
 	{
@@ -75,25 +58,7 @@ export const categories = [
 	},
 ];
 
-export type categoryType = (typeof categories)[number];
 
-export type incomeType = {
-	id: string;
-	name: string;
-}[];
-
-export type incomeItem = {
-	source: string;
-	amount: number;
-	id: string;
-	frequency: string;
-	income_name: string;
-	createdAt: Date;
-	updatedAt: Date;
-	userId: string;
-}
-
-export type incomeItems = incomeItem[];
 
 export const incomeSources: incomeType = [
 	{
@@ -115,8 +80,6 @@ export const incomeSources: incomeType = [
 		name: "Other",
 	}
 ];
-
-
 
 
 export const incomeIcons: Record<
@@ -153,9 +116,8 @@ export const incomeColors: Record<string, { color: string; backgroundColor: stri
 	},
 };
 
-export const frequencyLabels: Record<string, string> = {
-	"per-day": "Daily",
-	"per-week": "Weekly",
-	"per-month": "Monthly",
-	"per-year": "Yearly",
-};
+export const frequencyLabels: { value: string; label: string }[] = [
+	{ value: Frequency.PER_WEEK, label: "Per Week" },
+	{ value: Frequency.PER_MONTH, label: "Per Month" },
+	{ value: Frequency.PER_YEAR, label: "Per Year" },
+];

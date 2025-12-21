@@ -21,7 +21,7 @@ import { deleteIncome, editIncome, getIncome } from "@/app/actions/income";
 import { submitNewIncome } from "@/app/actions/query";
 import { frequencyLabels, incomeColors, incomeIcons, incomeSources } from "@/data";
 import { useSession } from "@/lib/auth-client";
-import { type incomeItem, incomeItems } from "@/types";
+import { Frequency, type incomeItem, type incomeItems } from "@/types";
 import { Button } from "../../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/card";
 import {
@@ -62,8 +62,8 @@ export function IncomeManager() {
     const queryClient = useQueryClient();
     const [formData, setFormData] = useState({
         amount: 0,
-        source: "salary",
-        frequency: "per-month",
+        source: "",
+        frequency: Frequency.PER_MONTH,
         income_name: "",
     });
     const [errors, setErrors] = useState<z.ZodError | null>(null);
@@ -105,8 +105,11 @@ export function IncomeManager() {
         | { type: "edit"; item: incomeItem };
 
     const [optimisticIncomeData, optimisticUpdate] = useOptimistic(
-        incomeData?.data || [],
-        (state, action: OptimisticAction) => {
+        incomeData?.data?.map((item) => ({
+            ...item,
+            frequency: item.frequency as Frequency,
+        })) || [],
+        (state: incomeItem[], action: OptimisticAction): incomeItems => {
             if (action.type === "delete") {
                 return state.filter((item) => item.id !== action.id);
             }
@@ -139,7 +142,7 @@ export function IncomeManager() {
             });
         },
         mutationFn: async ({ formData, id }: { formData: Partial<incomeItem>; id: string }) =>
-            await editIncome(formData, id),
+            await editIncome(formData as { amount: number; source: string; frequency: Frequency; income_name: string }, id),
     });
 
     const {
@@ -148,8 +151,20 @@ export function IncomeManager() {
         isSuccess,
     } = useMutation({
         mutationKey: ["submitNewIncome"],
-        mutationFn: async (formdata: Omit<incomeItem, "id" | "createdAt" | "updatedAt" | "userId">) =>
-            await submitNewIncome(formdata),
+        mutationFn: async (
+            formdata: {
+                amount: number;
+                source: string;
+                frequency: Frequency;
+                income_name: string;
+            }
+        ) =>
+            await submitNewIncome({
+                amount: formdata.amount,
+                source: formdata.source,
+                frequency: formdata.frequency,
+                income_name: formdata.income_name,
+            }),
         onSuccess: (data) => {
             toast.success(data.message, {
                 description: `${formData.income_name} has been added to your income list.`,
@@ -169,8 +184,8 @@ export function IncomeManager() {
     const resetForm = () => {
         setFormData({
             amount: 0,
-            source: "salary",
-            frequency: "per-month",
+            source: "",
+            frequency: Frequency.PER_MONTH,
             income_name: "",
         });
         setErrors(null);
@@ -179,6 +194,9 @@ export function IncomeManager() {
     const handleAddIncome = async (e: React.MouseEvent<HTMLButtonElement>) => {
         e.preventDefault();
         const parsedData = incomeSchema.safeParse(formData);
+
+
+        console.log("parsedData", parsedData);
 
         if (!parsedData.success) {
             setErrors(parsedData.error);
@@ -196,9 +214,18 @@ export function IncomeManager() {
                     createdAt: new Date(),
                     updatedAt: new Date(),
                     userId: session?.user?.id as string,
+                    incomeSource: {
+                        name: parsedData.data.source as string,
+                        id: crypto.randomUUID(),
+                    },
+                    frequency: parsedData.data.frequency as Frequency,
                 },
             });
-            submitNewIncomeMutation(parsedData?.data);
+            // Pass correct types to submitNewIncomeMutation
+            submitNewIncomeMutation({
+                ...parsedData.data,
+                frequency: parsedData.data.frequency as Frequency,
+            });
         });
     };
 
@@ -243,7 +270,7 @@ export function IncomeManager() {
         setEditingItem(item);
         setFormData({
             amount: item.amount,
-            source: item.source,
+            source: item.incomeSource?.name || "",
             frequency: item.frequency,
             income_name: item.income_name,
         });
@@ -409,18 +436,19 @@ export function IncomeManager() {
                                         <Select
                                             disabled={isPending}
                                             name="source"
-                                            value={formData.source}
+                                            value={formData.source || undefined}
                                             onValueChange={(value) => setFormData({ ...formData, source: value })}
                                         >
                                             <SelectTrigger className="cursor-pointer w-full">
                                                 <SelectValue placeholder="Select income source" />
                                             </SelectTrigger>
+
                                             <SelectContent>
                                                 {incomeSources.map((income) => (
                                                     <SelectItem
                                                         key={income.id}
                                                         className="cursor-pointer"
-                                                        value={income.name.toLowerCase()}
+                                                        value={income.name}
                                                     >
                                                         {income.name.charAt(0).toUpperCase() + income.name.slice(1)}
                                                     </SelectItem>
@@ -437,8 +465,10 @@ export function IncomeManager() {
                                         <Select
                                             disabled={isPending}
                                             name="frequency"
-                                            value={formData.frequency}
-                                            onValueChange={(value) => setFormData({ ...formData, frequency: value })}
+                                            value={formData.frequency || undefined}
+                                            onValueChange={(value) =>
+                                                setFormData({ ...formData, frequency: value as Frequency })
+                                            }
                                         >
                                             <SelectTrigger className="cursor-pointer w-full">
                                                 <SelectValue placeholder="Select frequency" />
@@ -507,10 +537,10 @@ export function IncomeManager() {
                     ) : (
                         optimisticIncomeData?.map((item, index: number) => {
                             const Icon =
-                                incomeIcons[item.source.toLocaleLowerCase() as keyof typeof incomeIcons] ||
+                                incomeIcons[item.incomeSource?.name.toLowerCase() as keyof typeof incomeIcons] ||
                                 IconCash;
                             const colors = incomeColors[
-                                item.source.toLocaleLowerCase() as keyof typeof incomeColors
+                                item.incomeSource?.name.toLowerCase() as keyof typeof incomeColors
                             ] || {
                                 color: "#1a64db",
                                 backgroundColor: "#e7effb",
@@ -532,8 +562,10 @@ export function IncomeManager() {
                                         <div className="flex flex-col flex-1 min-w-0">
                                             <p className="text-md font-semibold truncate">{item.income_name}</p>
                                             <p className="text-sm text-muted-foreground capitalize">
-                                                {item.source.charAt(0).toUpperCase() + item.source.slice(1)} ·{" "}
-                                                {frequencyLabels[item.frequency as keyof typeof frequencyLabels]}
+                                                {item.incomeSource &&
+                                                    item.incomeSource?.name.charAt(0).toUpperCase() +
+                                                    item.incomeSource?.name.slice(1)}{" "}
+                                                · {frequencyLabels.find((label) => label.value === item.frequency.toString())?.label}
                                             </p>
                                             <p className="text-lg font-bold text-green-600 mt-1">
                                                 ₱{item.amount.toLocaleString()}
@@ -547,7 +579,11 @@ export function IncomeManager() {
                                             size="icon"
                                             className="cursor-pointer hover:bg-green-100 hover:text-green-600"
                                             onClick={() =>
-                                                openViewDialog({ ...item, createdAt: item.createdAt as Date })
+                                                openViewDialog({
+                                                    ...item,
+                                                    createdAt: item.createdAt as Date,
+                                                    frequency: item.frequency as Frequency,
+                                                })
                                             }
                                         >
                                             <IconEye size={18} />
@@ -557,7 +593,11 @@ export function IncomeManager() {
                                             size="icon"
                                             className="cursor-pointer hover:bg-blue-100 hover:text-blue-600"
                                             onClick={() =>
-                                                openEditDialog({ ...item, createdAt: item.createdAt as Date })
+                                                openEditDialog({
+                                                    ...item,
+                                                    createdAt: item.createdAt as Date,
+                                                    frequency: item.frequency as Frequency,
+                                                })
                                             }
                                         >
                                             <IconEdit size={18} />

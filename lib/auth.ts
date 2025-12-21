@@ -11,6 +11,10 @@ export const auth = betterAuth({
 	database: prismaAdapter(prisma, {
 		provider: "postgresql",
 	}),
+	trustedOrigins: process.env.NODE_ENV === "production" ? [process.env.NEXT_PUBLIC_BETTER_AUTH_URL!] : ["http://localhost:3000"],
+	baseURL: process.env.NODE_ENV === "production" ? process.env.NEXT_PUBLIC_BETTER_AUTH_URL : "http://localhost:3000",
+	// biome-ignore lint/style/noNonNullAssertion: <explanation>
+	secret: process.env.BETTER_AUTH_SECRET!,
 	plugins: [
 		emailOTP({
 			async sendVerificationOTP({ email, otp, type }) {

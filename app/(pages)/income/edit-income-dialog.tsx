@@ -1,14 +1,5 @@
 import { toast } from "sonner";
-import { Button } from "../../../components/ui/button";
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from "../../../components/ui/dialog";
+import { frequencyLabels, incomeSources } from "@/data";
 import { Input } from "../../../components/ui/input";
 import { Label } from "../../../components/ui/label";
 import {
@@ -28,6 +19,7 @@ export default function EditIncomeDialog({
     formData: any;
     setFormData: (data: any) => void;
 }) {
+    console.log("formData", formData);
     return (
         <div className="grid gap-4 py-4">
             <div className="grid gap-2">
@@ -75,27 +67,22 @@ export default function EditIncomeDialog({
                     <Label htmlFor="edit-source">Income Source</Label>
                     <Select
                         value={formData.source}
-                        onValueChange={(value) => setFormData({ ...formData, source: value })}
+                        onValueChange={(value) =>
+                            setFormData({ ...formData, source: value })
+                        }
                     >
                         <SelectTrigger className="cursor-pointer w-full">
-                            <SelectValue placeholder="Select income source" />
+                            <SelectValue
+                                defaultValue={formData.source}
+                                placeholder="Select income source"
+                            />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem className="cursor-pointer" value="salary">
-                                Salary
-                            </SelectItem>
-                            <SelectItem className="cursor-pointer" value="freelance">
-                                Freelance
-                            </SelectItem>
-                            <SelectItem className="cursor-pointer" value="business">
-                                Business
-                            </SelectItem>
-                            <SelectItem className="cursor-pointer" value="investment">
-                                Investment
-                            </SelectItem>
-                            <SelectItem className="cursor-pointer" value="other">
-                                Other
-                            </SelectItem>
+                            {incomeSources.map((income) => (
+                                <SelectItem key={income.id} className="cursor-pointer" value={income.name}>
+                                    {income.name.charAt(0).toUpperCase() + income.name.slice(1)}
+                                </SelectItem>
+                            ))}
                         </SelectContent>
                     </Select>
                     {getErrorMessage("source") && (
@@ -113,15 +100,11 @@ export default function EditIncomeDialog({
                             <SelectValue placeholder="Select frequency" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem className="cursor-pointer" value="per-week">
-                                Per Week
-                            </SelectItem>
-                            <SelectItem className="cursor-pointer" value="per-month">
-                                Per Month
-                            </SelectItem>
-                            <SelectItem className="cursor-pointer" value="per-year">
-                                Per Year
-                            </SelectItem>
+                            {frequencyLabels.map((label) => (
+                                <SelectItem key={label.value} className="cursor-pointer" value={label.value}>
+                                    {label.label}
+                                </SelectItem>
+                            ))}
                         </SelectContent>
                     </Select>
                     {getErrorMessage("frequency") && (

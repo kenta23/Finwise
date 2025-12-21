@@ -2,7 +2,7 @@
 import { IconChevronDown, IconLoader2, IconPlus, IconTrash } from "@tabler/icons-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { quickAdd, submitNewIncome } from "@/app/actions/query";
 import { Button } from "@/components/ui/button";
@@ -26,9 +26,19 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { type expenseType, Frequency, type incomeSourcesType } from "@/data";
+import { categories, incomeSources } from "@/data";
+import { useIncomeStore } from "@/lib/store";
+import { type expenseType, Frequency, type incomeSourcesType } from "@/types";
 
-export function QuickAddDialog({ isOpen, setIsOpen }: { isOpen: boolean, setIsOpen: (open: boolean) => void }) {
+export function QuickAddDialog({
+	isOpen,
+	setIsOpen,
+}: {
+	isOpen: boolean;
+	setIsOpen: (open: boolean) => void;
+}) {
+	const { income: incomeFromStore } = useIncomeStore();
+
 	const [income, setIncome] = useState<incomeSourcesType[]>([
 		{
 			amount: 0,
@@ -41,9 +51,9 @@ export function QuickAddDialog({ isOpen, setIsOpen }: { isOpen: boolean, setIsOp
 		amount: 0,
 		category: "",
 		description: "",
+		fundIncome: "",
 	});
 	const queryClient = useQueryClient();
-
 
 	const {
 		data,
@@ -51,11 +61,11 @@ export function QuickAddDialog({ isOpen, setIsOpen }: { isOpen: boolean, setIsOp
 		isPending,
 		isError,
 	} = useMutation({
-		mutationFn: async (data: { income: incomeSourcesType[]; expense: expenseType[] }) =>
+		mutationFn: async (data: { income: incomeSourcesType[]; expense: expenseType }) =>
 			quickAdd(data),
 		onSettled: () => {
 			setIsOpen(false);
-		}
+		},
 	});
 
 	console.log("income", income, "expense", expense);
@@ -65,7 +75,7 @@ export function QuickAddDialog({ isOpen, setIsOpen }: { isOpen: boolean, setIsOp
 		console.log("added expenses:", expense);
 
 		if (expense.amount > 0 && expense.category && expense.description) {
-			const res = await quickAddMutation({ income: [], expense: [expense] });
+			const res = await quickAddMutation({ income: [], expense });
 
 			if (!res?.error) {
 				toast.success("Expense added successfully", {
@@ -80,6 +90,7 @@ export function QuickAddDialog({ isOpen, setIsOpen }: { isOpen: boolean, setIsOp
 
 			queryClient.invalidateQueries({ queryKey: ["expenses"] });
 			queryClient.invalidateQueries({ queryKey: ["expenses-categories"] });
+			queryClient.invalidateQueries({ queryKey: ["summary"] });
 		}
 	}
 
@@ -89,8 +100,8 @@ export function QuickAddDialog({ isOpen, setIsOpen }: { isOpen: boolean, setIsOp
 		console.log("income", income);
 
 		if (income.length > 0) {
-			const res = await quickAddMutation({ income: income, expense: [] });
-			console.log('INCOME TO SUBMIT', income)
+			const res = await quickAddMutation({ income, expense });
+			console.log("INCOME TO SUBMIT", income);
 
 			if (!res?.error) {
 				toast.success("Income added successfully", {
@@ -99,146 +110,136 @@ export function QuickAddDialog({ isOpen, setIsOpen }: { isOpen: boolean, setIsOp
 			} else {
 				toast.error("Failed to add income", {
 					description: res?.error,
-				})
+				});
 			}
 
 			queryClient.invalidateQueries({ queryKey: ["income"] });
-			queryClient.invalidateQueries({ queryKey: ["user-info"] });
+			queryClient.invalidateQueries({ queryKey: ["summary"] });
 			queryClient.invalidateQueries({ queryKey: ["income-charts-data"] });
 		}
 	}
 
-
 	// Render additional income forms (items 1-2, skipping the first one)
 	const renderAdditionalIncomeForms = () => {
-		return income
-			.slice(1, 3)
-			.map((_item: incomeSourcesType, index: number) => {
-				const actualIndex = index + 1; // Adjust index since we're slicing from position 1
-				const amountToChange = income[actualIndex].amount;
-				const sourceToChange = income[actualIndex].source;
-				const frequencyToChange = income[actualIndex].frequency;
+		return income.slice(1, 3).map((_item: incomeSourcesType, index: number) => {
+			const actualIndex = index + 1; // Adjust index since we're slicing from position 1
+			const amountToChange = income[actualIndex].amount;
+			const sourceToChange = income[actualIndex].source;
+			const frequencyToChange = income[actualIndex].frequency;
 
-				return (
-					<div key={`income-form-${actualIndex}`} className="grid grid-cols-12 gap-2 w-full">
-						<div className="col-span-12 flex flex-col gap-3">
-							<Label htmlFor={`income-name-${actualIndex}`}>Name</Label>
+			return (
+				<div key={`income-form-${actualIndex}`} className="grid grid-cols-12 gap-2 w-full">
+					<div className="col-span-12 flex flex-col gap-3">
+						<Label htmlFor={`income-name-${actualIndex}`}>Name</Label>
+						<Input
+							id={`income-name-${actualIndex}`}
+							name={`income-name-${actualIndex}`}
+							value={income[actualIndex].income_name}
+							autoComplete="off"
+							onChange={(e) => {
+								const updated: incomeSourcesType[] = [...income];
+								updated[actualIndex].income_name = e.target.value;
+								setIncome(updated);
+							}}
+						/>
+					</div>
+
+					<div className="flex flex-col gap-3 col-span-6">
+						<Label htmlFor={`income-amount-${actualIndex}`}>Amount</Label>
+						<div className="relative">
+							<span className="text-muted-foreground text-sm absolute left-2 top-1/2 -translate-y-1/2">
+								₱
+							</span>{" "}
 							<Input
-								id={`income-name-${actualIndex}`}
-								name={`income-name-${actualIndex}`}
-								value={income[actualIndex].income_name}
+								type="number"
+								min={0}
+								name={`income-amount-${actualIndex}`}
+								id={`income-amount-${actualIndex}`}
 								autoComplete="off"
 								onChange={(e) => {
+									if (e.target.value.startsWith("0")) {
+										e.target.value = e.target.value.slice(1);
+									}
 									const updated: incomeSourcesType[] = [...income];
-									updated[actualIndex].income_name = e.target.value;
+									updated[actualIndex].amount = Number(e.target.value);
 									setIncome(updated);
 								}}
+								value={amountToChange.toString()}
+								className="pl-6"
 							/>
 						</div>
-
-						<div className="flex flex-col gap-3 col-span-6">
-							<Label htmlFor={`income-amount-${actualIndex}`}>Amount</Label>
-							<div className="relative">
-								<span className="text-muted-foreground text-sm absolute left-2 top-1/2 -translate-y-1/2">
-									₱
-								</span>{" "}
-								<Input
-									type="number"
-									min={0}
-									name={`income-amount-${actualIndex}`}
-									id={`income-amount-${actualIndex}`}
-									autoComplete="off"
-									onChange={(e) => {
-										if (e.target.value.startsWith("0")) {
-											e.target.value = e.target.value.slice(1);
-										}
-										const updated: incomeSourcesType[] = [...income];
-										updated[actualIndex].amount = Number(e.target.value);
-										setIncome(updated);
-									}}
-									value={amountToChange.toString()}
-									className="pl-6"
-								/>
-							</div>
-						</div>
-
-						<div className="flex flex-col gap-3 col-span-3">
-							<Label data-lpignore="true">Source</Label>
-
-							<Select
-								value={sourceToChange}
-								onValueChange={(value) => {
-									const updated: incomeSourcesType[] = [...income];
-									updated[actualIndex].source = value;
-									setIncome(updated);
-								}}
-							>
-								<SelectTrigger
-									id={`income-source-${actualIndex}`}
-									className="w-full cursor-pointer"
-									data-lpignore="true"
-								>
-									<SelectValue defaultValue={sourceToChange} placeholder="Select a source" />
-								</SelectTrigger>
-
-								<SelectContent className="cursor-pointer">
-									<SelectItem className="cursor-pointer" value="salary">
-										Salary
-									</SelectItem>
-									<SelectItem className="cursor-pointer" value="freelance">
-										Freelance
-									</SelectItem>
-									<SelectItem className="cursor-pointer" value="business">
-										Business
-									</SelectItem>
-									<SelectItem className="cursor-pointer" value="investment">
-										Investment
-									</SelectItem>
-									<SelectItem className="cursor-pointer" value="other">
-										Other
-									</SelectItem>
-								</SelectContent>
-							</Select>
-						</div>
-
-						<div className="flex flex-col self-end gap-3 col-span-3">
-							<Label className="sr-only" data-lpignore="true">
-								Frequency
-							</Label>
-
-							<Select
-								value={frequencyToChange}
-								onValueChange={(value) => {
-									const updated: incomeSourcesType[] = [...income];
-
-									updated[actualIndex].frequency = value as Frequency;
-									setIncome(updated);
-								}}
-							>
-								<SelectTrigger
-									id={`income-frequency-${actualIndex}`}
-									className="w-full cursor-pointer"
-									data-lpignore="true"
-								>
-									<SelectValue defaultValue={frequencyToChange} placeholder="Select a type" />
-								</SelectTrigger>
-
-								<SelectContent>
-									<SelectItem className="cursor-pointer" value="per-day">
-										Per Day
-									</SelectItem>
-									<SelectItem className="cursor-pointer" value="per-month">
-										Per Month
-									</SelectItem>
-									<SelectItem className="cursor-pointer" value="per-week">
-										Per Week
-									</SelectItem>
-								</SelectContent>
-							</Select>
-						</div>
 					</div>
-				);
-			});
+
+					<div className="flex flex-col gap-3 col-span-3">
+						<Label data-lpignore="true">Source</Label>
+
+						<Select
+							value={sourceToChange}
+							onValueChange={(value) => {
+								const updated: incomeSourcesType[] = [...income];
+								updated[actualIndex].source = value;
+								setIncome(updated);
+							}}
+						>
+							<SelectTrigger
+								id={`income-source-${actualIndex}`}
+								className="w-full cursor-pointer"
+								data-lpignore="true"
+							>
+								<SelectValue defaultValue={sourceToChange} placeholder="Select a source" />
+							</SelectTrigger>
+
+							<SelectContent className="cursor-pointer">
+								<SelectGroup>
+									<SelectLabel>Sources</SelectLabel>
+									{incomeSources.map((source) => (
+										<SelectItem className="cursor-pointer" value={source.name}>
+											{source.name}
+										</SelectItem>
+									))}
+								</SelectGroup>
+							</SelectContent>
+						</Select>
+					</div>
+
+					<div className="flex flex-col self-end gap-3 col-span-3">
+						<Label className="sr-only" data-lpignore="true">
+							Frequency
+						</Label>
+
+						<Select
+							value={frequencyToChange}
+							onValueChange={(value) => {
+								const updated: incomeSourcesType[] = [...income];
+
+								updated[actualIndex].frequency = value as Frequency;
+								setIncome(updated);
+							}}
+						>
+							<SelectTrigger
+								id={`income-frequency-${actualIndex}`}
+								className="w-full cursor-pointer"
+								data-lpignore="true"
+							>
+								<SelectValue defaultValue={frequencyToChange} placeholder="Select a type" />
+							</SelectTrigger>
+
+							<SelectContent>
+								<SelectItem className="cursor-pointer" value="per-day">
+									Per Day
+								</SelectItem>
+								<SelectItem className="cursor-pointer" value="per-month">
+									Per Month
+								</SelectItem>
+								<SelectItem className="cursor-pointer" value="per-week">
+									Per Week
+								</SelectItem>
+							</SelectContent>
+						</Select>
+					</div>
+				</div>
+			);
+		});
 	};
 
 	return (
@@ -328,21 +329,14 @@ export function QuickAddDialog({ isOpen, setIsOpen }: { isOpen: boolean, setIsOp
 										</SelectTrigger>
 
 										<SelectContent className="cursor-pointer">
-											<SelectItem className="cursor-pointer" value="salary">
-												Salary
-											</SelectItem>
-											<SelectItem className="cursor-pointer" value="freelance">
-												Freelance
-											</SelectItem>
-											<SelectItem className="cursor-pointer" value="business">
-												Business
-											</SelectItem>
-											<SelectItem className="cursor-pointer" value="investment">
-												Investment
-											</SelectItem>
-											<SelectItem className="cursor-pointer" value="other">
-												Other
-											</SelectItem>
+											<SelectGroup>
+												<SelectLabel>Sources</SelectLabel>
+												{incomeSources.map((source) => (
+													<SelectItem className="cursor-pointer" value={source.name}>
+														{source.name}
+													</SelectItem>
+												))}
+											</SelectGroup>
 										</SelectContent>
 									</Select>
 								</div>
@@ -428,7 +422,6 @@ export function QuickAddDialog({ isOpen, setIsOpen }: { isOpen: boolean, setIsOp
 							)}
 						</div>
 
-
 						{/**Display TOTAL */}
 						<Card>
 							<CardHeader>
@@ -477,18 +470,35 @@ export function QuickAddDialog({ isOpen, setIsOpen }: { isOpen: boolean, setIsOp
 								<SelectContent className="w-full">
 									<SelectGroup>
 										<SelectLabel>Categories</SelectLabel>
-										<SelectItem className="cursor-pointer" value="food">
-											Food
-										</SelectItem>
-										<SelectItem className="cursor-pointer" value="travel">
-											Travel
-										</SelectItem>
-										<SelectItem className="cursor-pointer" value="entertainment">
-											Entertainment
-										</SelectItem>
-										<SelectItem className="cursor-pointer" value="other">
-											Other
-										</SelectItem>
+										{categories
+											.filter((cat) => cat.name)
+											.map((category) => (
+												<SelectItem className="cursor-pointer" value={category.name}>
+													{category.name}
+												</SelectItem>
+											))}
+									</SelectGroup>
+								</SelectContent>
+							</Select>
+						</div>
+
+						<div className="flex flex-col gap-3">
+							<Label htmlFor="fund-income">Funds to use</Label>
+							<Select
+								value={expense.fundIncome}
+								onValueChange={(value) => setExpense({ ...expense, fundIncome: value })}
+							>
+								<SelectTrigger id="fund-income" className="w-full" data-lpignore="true">
+									<SelectValue placeholder="Select a fund" />
+								</SelectTrigger>
+								<SelectContent className="w-full">
+									<SelectGroup>
+										<SelectLabel>Funds</SelectLabel>
+										{incomeFromStore.map((source) => (
+											<SelectItem className="cursor-pointer" value={source.id.toString()}>
+												{source.income_name}
+											</SelectItem>
+										))}
 									</SelectGroup>
 								</SelectContent>
 							</Select>

@@ -1,6 +1,6 @@
 "use client";
 
-// Comprehensive expense management component
+
 import {
     IconCalendar,
     IconEdit,
@@ -13,12 +13,13 @@ import {
     IconTrendingDown,
     IconWallet,
 } from "@tabler/icons-react";
-import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { startTransition, useEffect, useOptimistic, useState } from "react";
 import { toast } from "sonner";
 import z from "zod";
-import { getExpenses } from "@/app/actions/expenses";
-import type { expenseItem } from "@/types";
+import { addExpense, deleteExpense, editExpense, getExpenses } from "@/app/actions/expenses";
+import { useIncomeStore } from "@/lib/store";
+import type { expenseItem, expenseWithRelations } from "@/types";
 import { Badge } from "../../../components/ui/badge";
 import { Button } from "../../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/card";
@@ -45,10 +46,18 @@ import { categories } from "../../../data";
 
 const expenseSchema = z.object({
     amount: z.number().positive("Amount must be greater than 0"),
-    categoryId: z.number().min(1, "Please select a category"),
+    category: z.string().min(1, "Please select a category"),
     description: z.string().min(1, "Description is required"),
-    notes: z.string().optional(),
+    notes: z.string().default(""),
+    fundIncomeId: z.string().min(1, "Please select a income"),
 });
+
+
+type OptimisticExpensesAction = {
+    type: "add" | "edit" | "delete";
+    item?: Omit<expenseWithRelations, "userId" | "income">;
+    id?: string;
+};
 
 export function ExpenseManager() {
     const {
@@ -60,6 +69,8 @@ export function ExpenseManager() {
         queryFn: async () => await getExpenses(),
     });
 
+    const incomedata = useIncomeStore((state) => state.income);
+
     console.log("expensesData", expensesData);
 
     // Get categories from data.ts instead of localStorage
@@ -67,65 +78,90 @@ export function ExpenseManager() {
         categoryId: cat.id,
         categoryName: cat.name,
     }));
-
-
-    const [userIncomes] = useState([
-        {
-            id: "1",
-            name: "Salary",
-        },
-        {
-            id: "2",
-            name: "Freelance",
-        },
-        {
-            id: "3",
-            name: "Business",
-        },
-        {
-            id: "4",
-            name: "Investment",
-        },
-        {
-            id: "5",
-            name: "Other",
-        },
-    ]);
     const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
     const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
-    const [editingExpense, setEditingExpense] = useState<expenseItem | null>(null);
-    const [viewingExpense, setViewingExpense] = useState<expenseItem | null>(null);
+    const [editingExpense, setEditingExpense] = useState<expenseWithRelations | null>(null);
+    const [viewingExpense, setViewingExpense] = useState<expenseWithRelations | null>(null);
     const [searchTerm, setSearchTerm] = useState("");
     const [filterCategory, setFilterCategory] = useState<string>("all");
+    const queryClient = useQueryClient();
+    const [optimisticExpensesData, optimisticUpdate] = useOptimistic(expensesData?.data as expenseWithRelations[], (state: expenseWithRelations[], action: OptimisticExpensesAction): expenseWithRelations[] => {
+        if (action.type === 'add') {
+            return [...(state || []), action.item as expenseWithRelations];
+        }
+        if (action.type === 'edit') {
+            return state?.map((item) => item?.id === action.id ? { ...item, ...action.item } as expenseWithRelations : item as expenseWithRelations) || null;
+        }
+        if (action.type === 'delete') {
+            return state?.filter((item) => item?.id !== action.id) || null;
+        }
+
+        return state;
+    })
+
+    const { mutate: addExpenseMutation, isPending: isAddPending } = useMutation({
+        mutationKey: ["addExpense"],
+        mutationFn: async (expense: Omit<expenseItem, "id" | "createdAt" | "updatedAt" | "userId">) =>
+            await addExpense(expense),
+        onSuccess: (data) => {
+            toast.success(data.message, {
+                description: "Expense added successfully",
+            });
+            queryClient.invalidateQueries({ queryKey: ["expenses"] });
+        },
+        onError: (error) => {
+            toast.error(error.message, {
+                description: "Failed to add expense",
+            });
+        },
+    });
+    const { mutate: deleteExpenseMutation, isPending: isDeletePending } = useMutation({
+        mutationKey: ["deleteExpense"],
+        mutationFn: async (id: string) => await deleteExpense(id),
+        onSuccess: (data) => {
+            toast.success(data.message, {
+                description: "Expense deleted successfully",
+            });
+            queryClient.invalidateQueries({ queryKey: ["expenses"] });
+        },
+        onError: (error) => {
+            toast.error(error.message, {
+                description: "Failed to delete expense",
+            });
+        },
+    })
+
+    const { mutate: editExpenseMutation, isPending: isEditPending } = useMutation({
+        mutationKey: ["editExpense"],
+        mutationFn: async (expense: Partial<expenseWithRelations>) => await editExpense(expense),
+        onSuccess: (data) => {
+            if (!data.error) {
+                toast.success(data.message, {
+                    description: "Expense updated successfully",
+                });
+            } else {
+                toast.error(data.message, {
+                    description: data.error,
+                });
+            }
+            queryClient.invalidateQueries({ queryKey: ["expenses"] });
+        },
+        onError: (error) => {
+            toast.error("Failed to update expense", {
+                description: error.message,
+            });
+        },
+    })
 
     const [formData, setFormData] = useState({
         amount: "",
         category: "",
         description: "",
         notes: "",
-        incomeId: "",
+        fundIncomeId: "",
     });
     const [errors, setErrors] = useState<z.ZodError | null>(null);
-
-    // Load data from localStorage
-    // useEffect(() => {
-    //     // Load expenses
-    //     const storedExpenses = localStorage.getItem("expenses");
-    //     if (storedExpenses) {
-    //         try {
-    //             const parsed = JSON.parse(storedExpenses) as ExpenseItem[];
-    //             setExpenses(parsed);
-    //         } catch (error) {
-    //             console.error("Error parsing expenses:", error);
-    //         }
-    //     }
-    // }, []);
-
-    // const saveExpenses = (newExpenses: expenseItem[]) => {
-    //     localStorage.setItem("expenses", JSON.stringify(newExpenses));
-    //     setExpenses(newExpenses);
-    // };
 
     const resetForm = () => {
         setFormData({
@@ -133,147 +169,158 @@ export function ExpenseManager() {
             category: "",
             description: "",
             notes: "",
-            incomeId: "",
+            fundIncomeId: "",
         });
         setErrors(null);
     };
 
     const handleAddExpense = () => {
-        // try {
-        //     const selectedCategory = userCategories.find(
-        //         (cat) => cat.categoryId.toString() === formData.categoryId
-        //     );
-        //     if (!selectedCategory) {
-        //         toast.error("Please select a valid category");
-        //         return;
-        //     }
+        console.log("formData", formData);
+        try {
+            const parsedExpenseItem = expenseSchema.safeParse({
+                ...formData,
+                amount: Number(formData.amount),
+            });
 
-        //     const parsed = expenseSchema.parse({
-        //         ...formData,
-        //         amount: Number(formData.amount),
-        //         categoryId: Number(formData.categoryId),
-        //     });
+            if (!parsedExpenseItem.success) {
+                setErrors(parsedExpenseItem.error as z.ZodError);
+                return;
+            }
 
-        //     const newExpense: ExpenseItem = {
-        //         id: Date.now().toString(),
-        //         ...parsed,
-        //         categoryName: selectedCategory.categoryName,
-        //         date: new Date().toISOString(),
-        //     };
 
-        //     const updatedExpenses = [...expenses, newExpense];
-        //     saveExpenses(updatedExpenses);
+            startTransition(() => {
+                optimisticUpdate({
+                    type: "add",
+                    item: {
+                        ...parsedExpenseItem.data,
+                        id: crypto.randomUUID(),
+                        createdAt: new Date(),
+                        updatedAt: new Date(),
+                        expenseCategoryId: crypto.randomUUID(),
+                        incomeId: crypto.randomUUID(),
+                        expenseCategory: {
+                            name: parsedExpenseItem.data.category,
+                            id: crypto.randomUUID(),
+                            createdAt: new Date(),
+                            updatedAt: new Date(),
+                        }
+                    }
+                })
+                addExpenseMutation(parsedExpenseItem.data);
+            })
 
-        //     toast.success("Expense added successfully", {
-        //         description: `${parsed.description} has been added to your expenses.`,
-        //     });
 
-        //     resetForm();
-        //     setIsAddDialogOpen(false);
-        // } catch (error) {
-        //     setErrors(error as z.ZodError);
-        // }
+            toast.success("Expense added successfully", {
+                description: `${parsedExpenseItem.data.description} has been added to your expenses.`,
+            });
+
+            resetForm();
+            setIsAddDialogOpen(false);
+        } catch (error) {
+            setErrors(error as z.ZodError);
+        }
     };
 
     const handleEditExpense = () => {
-        // if (!editingExpense) return;
+        if (!editingExpense) return;
 
-        // try {
-        //     const selectedCategory = userCategories.find(
-        //         (cat) => cat.categoryId.toString() === formData.categoryId
-        //     );
-        //     if (!selectedCategory) {
-        //         toast.error("Please select a valid category");
-        //         return;
-        //     }
 
-        //     const parsed = expenseSchema.parse({
-        //         ...formData,
-        //         amount: Number(formData.amount),
-        //         categoryId: Number(formData.categoryId),
-        //     });
+        console.log("editingExpense", editingExpense);
 
-        //     const updatedExpenses = expenses.map((expense) =>
-        //         expense.id === editingExpense.id
-        //             ? {
-        //                 ...expense,
-        //                 ...parsed,
-        //                 categoryName: selectedCategory.categoryName,
-        //                 date: new Date().toISOString(),
-        //             }
-        //             : expense
-        //     );
 
-        //     saveExpenses(updatedExpenses);
-
-        //     toast.success("Expense updated successfully", {
-        //         description: `${parsed.description} has been updated.`,
-        //     });
-
-        //     resetForm();
-        //     setIsEditDialogOpen(false);
-        //     setEditingExpense(null);
-        // } catch (error) {
-        //     setErrors(error as z.ZodError);
-        // }
+        try {
+            const parsedExpensesItem = expenseSchema.parse({
+                ...formData,
+                amount: Number(formData.amount)
+            });
+            startTransition(() => {
+                optimisticUpdate({
+                    type: "edit", id: editingExpense.id, item: {
+                        ...parsedExpensesItem,
+                        id: editingExpense.id,
+                        createdAt: editingExpense.createdAt,
+                        updatedAt: new Date(),
+                        expenseCategoryId: editingExpense.expenseCategoryId,
+                        incomeId: editingExpense.incomeId,
+                        expenseCategory: {
+                            name: parsedExpensesItem.category,
+                            id: editingExpense.expenseCategory?.id ?? crypto.randomUUID(),
+                            createdAt: editingExpense.expenseCategory?.createdAt ?? new Date(),
+                            updatedAt: new Date(),
+                        }
+                    }
+                });
+                editExpenseMutation({ ...parsedExpensesItem, id: editingExpense.id });
+            });
+            resetForm();
+            setIsEditDialogOpen(false);
+            setEditingExpense(null);
+        } catch (error) {
+            setErrors(error as z.ZodError);
+        }
     };
 
     const handleDeleteExpense = (id: string) => {
-        // const expense = expenses.find((e) => e.id === id);
-        // const updatedExpenses = expenses.filter((expense) => expense.id !== id);
-        // saveExpenses(updatedExpenses);
-
-        // toast.success("Expense deleted", {
-        //     description: `${expense?.description} has been removed from your expenses.`,
-        // });
+        startTransition(() => {
+            optimisticUpdate({ type: "delete", id });
+            deleteExpenseMutation(id);
+        });
     };
 
-    const openEditDialog = (expense: expenseItem) => {
+    const openEditDialog = (expense: expenseWithRelations) => {
         setEditingExpense(expense);
         setFormData({
             amount: expense.amount.toString(),
-            category: expense.category.toString(),
+            category: expense.expenseCategory?.name || "",
             description: expense.description,
             notes: expense.notes || "",
-            incomeId: expense.incomeId || "",
+            fundIncomeId: expense.income?.id || "",
         });
         setIsEditDialogOpen(true);
         setErrors(null);
     };
 
     const openViewDialog = (expense: any) => {
+        console.log("expense", expense);
         setViewingExpense(expense);
         setIsViewDialogOpen(true);
     };
 
     // Calculate statistics
     const calculateStats = () => {
-        const totalExpenses = expensesData?.data?.reduce((acc, curr) => acc + curr.amount, 0) || 0;
+        const totalExpenses = optimisticExpensesData?.reduce((acc, curr) => acc + curr.amount, 0) || 0;
 
-        const categoryTotals = expensesData?.data?.reduce((acc, curr) => {
-            if (!acc[curr.category]) {
-                acc[curr.category] = 0;
-            }
-            acc[curr.category] += curr.amount;
-            return acc;
-        }, {} as Record<string, number>);
+        const categoryTotals = optimisticExpensesData?.reduce(
+            (acc, curr) => {
+                if (!acc[curr.expenseCategory?.name || ""]) {
+                    acc[curr.expenseCategory?.name || ""] = 0;
+                }
+                acc[curr.expenseCategory?.name || ""] += curr.amount;
+                return acc;
+            },
+            {} as Record<string, number>
+        );
 
         console.log("categoryTotals", categoryTotals);
 
+        const topCategory = Object.entries(categoryTotals || {}).reduce<{
+            categoryName: string;
+            total: number;
+        }>(
+            (acc, [categoryName, total]) => {
+                const category = userCategories.find(
+                    (cat) => cat.categoryName.toLowerCase() === categoryName.toLowerCase()
+                );
 
-
-        const topCategory = Object.entries(categoryTotals || {}).reduce<{ categoryName: string; total: number }>((acc, [categoryName, total]) => {
-            const category = userCategories.find((cat) => cat.categoryName.toLowerCase() === categoryName.toLowerCase());
-
-            return total > acc.total
-                ? {
-                    categoryName: category?.categoryName.toLowerCase() || "Unknown",
-                    total: total,
-                }
-                : acc;
-        }, { categoryName: "", total: 0 });
-
-
+                return total > acc.total
+                    ? {
+                        categoryName: category?.categoryName || "Unknown",
+                        total: total,
+                    }
+                    : acc;
+            },
+            { categoryName: "", total: 0 }
+        );
 
         return { totalExpenses, categoryTotals, topCategory };
     };
@@ -285,14 +332,14 @@ export function ExpenseManager() {
     console.log("totalExpenses", totalExpenses);
 
     // Filter expenses
-    const filteredExpenses = expensesData?.data?.filter((expense) => {
+    const filteredExpenses = optimisticExpensesData?.filter((expense) => {
         const matchesSearch =
             expense.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            expense.category.toLowerCase().includes(searchTerm.toLowerCase());
-
+            expense.expenseCategory?.name.toLowerCase().includes(searchTerm.toLowerCase());
 
         const matchesCategory =
-            filterCategory === "all" || expense.category.toLowerCase() === filterCategory.toLowerCase();
+            filterCategory === "all" ||
+            expense.expenseCategory?.name.toLowerCase() === filterCategory.toLowerCase();
         return matchesSearch && matchesCategory;
     });
 
@@ -303,10 +350,18 @@ export function ExpenseManager() {
     };
 
     const getCategoryIcon = (categoryname: string) => {
-        const categoryType = categories.find((type) => type.name.toLowerCase() === categoryname.toLowerCase());
+        const categoryType = categories.find((type) => type.name === categoryname);
 
         return categoryType ?? categories[5]; // Default to "Other" (index 5)
     };
+
+
+    const getCategoryIconComponent = (categoryname: string) => {
+        const Icon = getCategoryIcon(categoryname).icon;
+        return (
+            <Icon size={32} color={getCategoryIcon(categoryname).color} />
+        );
+    }
 
     return (
         <div className="w-full h-auto py-3">
@@ -332,7 +387,7 @@ export function ExpenseManager() {
                             <IconReceipt className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">{expensesData?.data?.length}</div>
+                            <div className="text-2xl font-bold">{optimisticExpensesData?.length}</div>
                             <p className="text-xs text-muted-foreground">Expense entries</p>
                         </CardContent>
                     </Card>
@@ -343,7 +398,11 @@ export function ExpenseManager() {
                             <IconTrendingDown className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-lg font-bold">{topCategory.categoryName.charAt(0).toUpperCase() + topCategory.categoryName.slice(1) || "None"}</div>
+                            <div className="text-lg font-bold">
+                                {/* {topCategory.categoryName.charAt(0).toUpperCase() +
+                                    topCategory.categoryName.slice(1) || "None"} */}
+                                {topCategory.categoryName || "None"}
+                            </div>
                             <p className="text-xs text-muted-foreground">
                                 {topCategory.total > 0
                                     ? `₱${topCategory.total.toLocaleString()}`
@@ -451,7 +510,7 @@ export function ExpenseManager() {
                                         value={formData.category}
                                         onValueChange={(value) => setFormData({ ...formData, category: value })}
                                     >
-                                        <SelectTrigger className="cursor-pointer">
+                                        <SelectTrigger className="cursor-pointer w-full">
                                             <SelectValue placeholder="Select a category" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -466,36 +525,36 @@ export function ExpenseManager() {
                                             ))}
                                         </SelectContent>
                                     </Select>
-                                    {getErrorMessage("categoryId") && (
-                                        <p className="text-sm text-red-500">{getErrorMessage("categoryId")}</p>
+                                    {getErrorMessage("category") && (
+                                        <p className="text-sm text-red-500">{getErrorMessage("category")}</p>
                                     )}
                                 </div>
 
                                 <div className="grid gap-2">
-                                    <Label htmlFor="edit-category">Funds to Use</Label>
+                                    <Label htmlFor="fundIncomeId">Funds to Use</Label>
                                     <Select
-                                        value={formData.incomeId}
-                                        onValueChange={(value) => setFormData({ ...formData, incomeId: value })}
+                                        value={formData.fundIncomeId}
+                                        onValueChange={(value) => setFormData({ ...formData, fundIncomeId: value })}
                                     >
-                                        <SelectTrigger className="cursor-pointer">
+                                        <SelectTrigger className="cursor-pointer w-full">
                                             <SelectValue placeholder="Select Fund from your Income" />
                                         </SelectTrigger>
 
                                         <SelectContent>
-                                            {userIncomes.map((income) => (
+                                            {incomedata?.map((income) => (
                                                 <SelectItem
                                                     key={income.id}
                                                     value={income.id.toString()}
                                                     className="cursor-pointer"
                                                 >
-                                                    {income.name}
+                                                    {income.income_name}
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>
 
-                                    {getErrorMessage("incomeId") && (
-                                        <p className="text-sm text-red-500">{getErrorMessage("incomeId")}</p>
+                                    {getErrorMessage("fundIncomeId") && (
+                                        <p className="text-sm text-red-500">{getErrorMessage("fundIncomeId")}</p>
                                     )}
                                 </div>
 
@@ -521,7 +580,11 @@ export function ExpenseManager() {
                                 >
                                     Cancel
                                 </Button>
-                                <Button className="cursor-pointer" onClick={handleAddExpense}>
+                                <Button
+                                    disabled={isAddPending}
+                                    className="cursor-pointer"
+                                    onClick={handleAddExpense}
+                                >
                                     Add Expense
                                 </Button>
                             </DialogFooter>
@@ -551,24 +614,25 @@ export function ExpenseManager() {
                         {filteredExpenses?.length === 0 ? (
                             <div className="col-span-12 flex flex-col items-center justify-center py-12 text-center">
                                 <IconReceipt size={64} className="text-muted-foreground mb-4" />
-                                <h3 className="text-lg font-semibold mb-2">
-                                    {expensesData?.data?.length === 0 ? "No expenses yet" : "No expenses match your filters"}
-                                </h3>
-                                <p className="text-sm text-muted-foreground mb-4">
-                                    {expensesData?.data?.length === 0
-                                        ? "Start by adding your first expense to track your spending."
-                                        : "Try adjusting your search or filter criteria."}
-                                </p>
-                                {expensesData?.data?.length === 0 && (
-                                    <Button onClick={() => setIsAddDialogOpen(true)} className="cursor-pointer">
-                                        <IconPlus size={20} />
-                                        <span>Add Your First Expense</span>
-                                    </Button>
-                                )}
+                                {optimisticExpensesData?.length === 0 && (
+                                    <>
+                                        <h3 className="text-lg font-semibold mb-2">No expenses yet</h3>
+                                        <p className="text-sm text-muted-foreground mb-4">
+                                            Start by adding your first expense to track your spending.
+                                        </p>
+
+
+                                        <Button onClick={() => setIsAddDialogOpen(true)} className="cursor-pointer">
+                                            <IconPlus size={20} />
+                                            <span>Add Your First Expense</span>
+                                        </Button>
+                                    </>
+                                )
+                                }
                             </div>
                         ) : (
                             filteredExpenses?.map((expense) => {
-                                const categoryIcon = getCategoryIcon(expense.category);
+                                const categoryIcon = getCategoryIcon(expense.expenseCategory?.name || "");
 
                                 return (
                                     <div
@@ -585,7 +649,12 @@ export function ExpenseManager() {
 
                                             <div className="flex flex-col flex-1 min-w-0">
                                                 <p className="text-md font-semibold truncate">{expense.description}</p>
-                                                <p className="text-sm text-muted-foreground">{expense.category}</p>
+                                                <p className="text-sm text-muted-foreground">
+                                                    {(expense.expenseCategory &&
+                                                        expense.expenseCategory?.name?.charAt(0).toUpperCase() +
+                                                        expense.expenseCategory?.name?.slice(1)) ||
+                                                        "N/A"}
+                                                </p>
                                                 <p className="text-lg font-bold text-red-600 mt-1">
                                                     ₱{expense.amount.toLocaleString()}
                                                 </p>
@@ -615,6 +684,7 @@ export function ExpenseManager() {
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
+                                                disabled={isDeletePending}
                                                 className="cursor-pointer hover:bg-red-100 hover:text-red-600"
                                                 onClick={() => handleDeleteExpense(expense.id)}
                                             >
@@ -629,7 +699,7 @@ export function ExpenseManager() {
                 )}
             </div>
 
-            {/* Edit Dialog */}
+            {/* EDIT DIALOG*/}
             <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
                 <DialogContent className="max-w-md">
                     <DialogHeader>
@@ -679,7 +749,7 @@ export function ExpenseManager() {
                                 value={formData.category}
                                 onValueChange={(value) => setFormData({ ...formData, category: value })}
                             >
-                                <SelectTrigger className="cursor-pointer">
+                                <SelectTrigger className="cursor-pointer w-full">
                                     <SelectValue placeholder="Select a category" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -694,8 +764,36 @@ export function ExpenseManager() {
                                     ))}
                                 </SelectContent>
                             </Select>
-                            {getErrorMessage("categoryId") && (
-                                <p className="text-sm text-red-500">{getErrorMessage("categoryId")}</p>
+                            {getErrorMessage("category") && (
+                                <p className="text-sm text-red-500">{getErrorMessage("category")}</p>
+                            )}
+                        </div>
+
+                        <div className="grid gap-2">
+                            <Label htmlFor="edit-fundIncomeId">Funds to Use</Label>
+                            <Select
+                                value={formData.fundIncomeId}
+                                onValueChange={(value) => setFormData({ ...formData, fundIncomeId: value })}
+                            >
+                                <SelectTrigger className="cursor-pointer w-full">
+                                    <SelectValue placeholder="Select Fund from your Income" />
+                                </SelectTrigger>
+
+                                <SelectContent>
+                                    {incomedata?.map((income) => (
+                                        <SelectItem
+                                            key={income.id}
+                                            value={income.id.toString()}
+                                            className="cursor-pointer"
+                                        >
+                                            {income.income_name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+
+                            {getErrorMessage("fundIncomeId") && (
+                                <p className="text-sm text-red-500">{getErrorMessage("fundIncomeId")}</p>
                             )}
                         </div>
 
@@ -722,7 +820,7 @@ export function ExpenseManager() {
                         >
                             Cancel
                         </Button>
-                        <Button className="cursor-pointer" onClick={handleEditExpense}>
+                        <Button className="cursor-pointer" disabled={isEditPending} onClick={handleEditExpense}>
                             Update Expense
                         </Button>
                     </DialogFooter>
@@ -742,21 +840,16 @@ export function ExpenseManager() {
                             <div className="flex items-center gap-4">
                                 <div
                                     style={{
-                                        backgroundColor: getCategoryIcon(viewingExpense.category).backgroundColor,
+                                        backgroundColor: getCategoryIcon(viewingExpense.expenseCategory?.name || "").backgroundColor,
                                     }}
                                     className="rounded-xl p-3 size-16 flex items-center justify-center"
                                 >
-                                    {(() => {
-                                        const Icon = getCategoryIcon(viewingExpense.category).icon;
-                                        return (
-                                            <Icon size={32} color={getCategoryIcon(viewingExpense.category).color} />
-                                        );
-                                    })()}
+                                    {getCategoryIconComponent(viewingExpense.expenseCategory?.name || "")}
                                 </div>
                                 <div className="flex-1">
                                     <h3 className="text-xl font-bold">{viewingExpense.description}</h3>
                                     <Badge variant="outline" className="mt-1">
-                                        {viewingExpense.category.charAt(0).toUpperCase() + viewingExpense.category.slice(1)}
+                                        {viewingExpense.expenseCategory?.name || "N/A"}
                                     </Badge>
                                 </div>
                             </div>
@@ -770,7 +863,7 @@ export function ExpenseManager() {
                                 </div>
                                 <div className="space-y-1">
                                     <p className="text-sm text-muted-foreground">Date</p>
-                                    <p className="text-lg font-semibold flex items-center gap-2">
+                                    <p className="text-md font-semibold flex items-center text-muted-foreground gap-2">
                                         <IconCalendar size={16} />
                                         {new Date(viewingExpense.createdAt).toLocaleDateString("en-US", {
                                             year: "numeric",
@@ -794,7 +887,7 @@ export function ExpenseManager() {
                                     <div className="flex justify-between">
                                         <span className="text-sm">This Category Total</span>
                                         <span className="font-semibold">
-                                            ₱{(categoryTotals?.[Number(viewingExpense.id)] || 0).toLocaleString()}
+                                            ₱{(categoryTotals?.[viewingExpense.expenseCategory?.name || ""] || 0).toLocaleString()}
                                         </span>
                                     </div>
                                     <div className="flex justify-between">
@@ -802,7 +895,7 @@ export function ExpenseManager() {
                                         <span className="font-semibold">
                                             {totalExpenses > 0
                                                 ? (
-                                                    ((categoryTotals?.[Number(viewingExpense.id)] || 0) / totalExpenses) *
+                                                    ((categoryTotals?.[viewingExpense.expenseCategory?.name || ""] || 0) / totalExpenses) *
                                                     100
                                                 ).toFixed(1)
                                                 : 0}

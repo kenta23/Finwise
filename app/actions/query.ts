@@ -1,11 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { headers } from "next/headers";
 import z from "zod";
-import type { expenseType, incomeSourcesType } from "@/data";
-import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { getAuthenticatedUser, UNAUTHORIZED_RESPONSE } from "@/lib/server";
+import type { expenseType, incomeSourcesType } from "@/types";
 
 const incomeSchema = z.object({
     amount: z.coerce.number().positive("Amount must be greater than 0"),
@@ -18,21 +17,19 @@ const expensesSchema = z.object({
     amount: z.coerce.number().positive("Amount must be greater than 0"),
     category: z.string().min(1, "Please select a category"),
     description: z.string().min(1, "Description is required"),
+    fundIncome: z.string().min(1, "Fund income is required"),
 });
 
 type incomeData = z.infer<typeof incomeSchema>;
 
 export async function submitNewIncome(formData: incomeData) {
-    const session = await auth.api.getSession({
-        headers: await headers(),
-    });
+    const user = await getAuthenticatedUser();
 
-    if (!session?.user) {
-        return {
-            error: "Unauthorized",
-            message: "Unauthorized",
-        };
+    if (!user) {
+        return UNAUTHORIZED_RESPONSE;
     }
+
+    console.log("formData", formData);
 
     try {
         const parsedData = incomeSchema.safeParse(formData);
@@ -44,18 +41,34 @@ export async function submitNewIncome(formData: incomeData) {
 
         if (!parsedData.success) {
             console.log("parsedData.error", parsedData.error);
+            console.log("formData", formData);
             return {
                 message: "Failed to submit new income",
                 error: parsedData.error?.message,
             };
         } else {
+            const matchedIncomeSource = await prisma.incomeSources.findFirst({
+                where: {
+                    name: {
+                        equals: parsedData.data.source as string,
+                    },
+                },
+            });
+
+            if (!matchedIncomeSource) {
+                return {
+                    message: "Income source not found",
+                    error: "Income source not found",
+                };
+            }
+
             const newIncomeData = await prisma.income.create({
                 data: {
                     amount: parsedData.data.amount,
-                    source: parsedData.data.source,
+                    incomeSourceId: matchedIncomeSource.id,
                     frequency: parsedData.data.frequency,
                     income_name: parsedData.data.income_name,
-                    userId: session.user.id,
+                    userId: user.id,
                 },
             });
 
@@ -78,44 +91,63 @@ export async function submitNewIncome(formData: incomeData) {
     }
 }
 
-export async function quickAdd(data: { income: incomeSourcesType[]; expense: expenseType[] }) {
-    const session = await auth.api.getSession({
-        headers: await headers(),
-    });
+export async function quickAdd(data: { income: incomeSourcesType[]; expense: expenseType }) {
+    const user = await getAuthenticatedUser();
 
-    if (!session?.user) {
-        return {
-            error: "Unauthorized",
-            message: "Unauthorized",
-        };
+    if (!user) {
+        return UNAUTHORIZED_RESPONSE;
     }
     console.log("DATA FROM SERVER", data);
 
     // Handle income
     if (data.income && data.income.length > 0) {
-        const incomeDataArray = data.income.map(income => incomeSchema.safeParse(income));
+        const incomeDataArray = data.income.map((income) => incomeSchema.safeParse(income));
 
-        if (!incomeDataArray.every(result => result.success)) {
-            const errors = incomeDataArray.map(result => result.error).filter(error => error !== null);
-            const errorMessages = errors.map(error => error?.issues.map((e: { message: string }) => e.message).join(", "));
+        if (!incomeDataArray.every((result) => result.success)) {
+            const errors = incomeDataArray
+                .map((result) => result.error)
+                .filter((error) => error !== null);
+            const errorMessages = errors.map((error) =>
+                error?.issues.map((e: { message: string }) => e.message).join(", ")
+            );
 
             return {
                 error: errorMessages.join(", "),
                 message: "Failed to add income(s)",
-                data: incomeDataArray.map(result => result.data).filter(data => data !== null),
+                data: incomeDataArray.map((result) => result.data).filter((data) => data !== null),
             };
         }
 
         try {
-            const userId = session.user.id;
+            const userId = user.id;
+
+            //look for the matched income source
+            const matchedIncomeSource = await prisma.incomeSources.findFirst({
+                where: {
+                    name: {
+                        in: incomeDataArray.map((result) => result.data?.source),
+                    },
+                },
+            });
+
+            if (!matchedIncomeSource) {
+                return {
+                    error: "Income source not found",
+                    message: "Income source not found",
+                    data: null,
+                };
+            }
 
             const newIncome = await prisma.income.createMany({
                 data: incomeDataArray
-                    .map(result => result.data)
-                    .filter(data => data !== null)
-                    .map(data => ({
-                        ...data,
+                    .map((result) => result.data)
+                    .filter((data) => data !== null)
+                    .map((data) => ({
+                        amount: data.amount,
+                        income_name: data.income_name,
+                        frequency: data.frequency,
                         userId,
+                        incomeSourceId: matchedIncomeSource.id,
                     })),
             });
             console.log("new income", newIncome);
@@ -139,12 +171,15 @@ export async function quickAdd(data: { income: incomeSourcesType[]; expense: exp
         }
     }
 
-    // Handle expense
-    if (data.expense && data.expense.length > 0) {
+    //****  HANDLE EXPENSE ***** //
+    if (data.expense && data.expense.amount > 0 &&
+        data.expense.category && data.expense.description && data.expense.fundIncome !== "") {
+
         const expenseData = expensesSchema.safeParse({
-            amount: data.expense[0].amount,
-            category: data.expense[0].category,
-            description: data.expense[0].description,
+            amount: data.expense.amount,
+            category: data.expense.category,
+            description: data.expense.description,
+            fundIncome: data.expense.fundIncome,
         });
 
         if (!expenseData.success) {
@@ -156,12 +191,45 @@ export async function quickAdd(data: { income: incomeSourcesType[]; expense: exp
         }
 
         try {
+            const matchedExpenseCategory = await prisma.expenseCategories.findFirst({
+                where: {
+                    name: {
+                        equals: expenseData.data.category as string,
+                    },
+                },
+            });
+
+            if (!matchedExpenseCategory) {
+                return {
+                    error: "Expense category not found",
+                    message: "Expense category not found",
+                    data: null,
+                };
+            }
+
+            const matchedIncome = await prisma.income.findFirst({
+                where: {
+                    id: {
+                        equals: expenseData.data.fundIncome,
+                    },
+                },
+            });
+
+            if (!matchedIncome) {
+                return {
+                    error: "Income not found",
+                    message: "Income not found",
+                    data: null,
+                };
+            }
+
             const newExpense = await prisma.expenses.create({
                 data: {
                     amount: expenseData.data.amount,
-                    category: expenseData.data.category,
+                    expenseCategoryId: matchedExpenseCategory.id,
                     description: expenseData.data.description,
-                    userId: session.user.id,
+                    userId: user.id,
+                    incomeId: matchedIncome.id,
                 },
             });
 

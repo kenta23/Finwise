@@ -1,104 +1,110 @@
 "use client";
 
 import { IconCalendar, IconTrendingDown, IconTrendingUp } from "@tabler/icons-react";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import type { categoryType } from "@/types";
+import { getExpenses } from "@/app/actions/expenses";
+import type { categoryBreakdownType, categoryType, expenseItem, expenseWithRelations } from "@/types";
 import { Badge } from "../../../components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/card";
 import { Progress } from "../../../components/ui/progress";
 import { categories } from "../../../data";
 
-type ExpenseItem = {
-    id: string;
-    amount: number;
-    categoryId: number;
-    categoryName: string;
-    description: string;
-    date: string;
-    notes?: string;
-};
-
-type CategoryBreakdown = {
-    categoryId: number;
-    categoryName: string;
-    totalAmount: number;
-    transactionCount: number;
-    averageAmount: number;
-    percentage: number;
-    lastExpenseDate: string;
-    categoryType: categoryType;
-};
-
 export function ExpenseCategoryBreakdown() {
-    const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
     const [userCategories, setUserCategories] = useState<
         { categoryId: number; categoryName: string }[]
     >([]);
-    const [categoryBreakdowns, setCategoryBreakdowns] = useState<CategoryBreakdown[]>([]);
+    const [categoryBreakdowns, setCategoryBreakdowns] = useState<{
+        categoryId: number;
+        categoryName: string;
+        totalAmount: number;
+        transactionCount: number;
+        averageAmount: number;
+        percentage: number;
+        lastExpenseDate: string;
+    }[]>([]);
     const [totalExpenses, setTotalExpenses] = useState(0);
+    //fetch expenses
+    const {
+        data: expenses,
+        isLoading,
+        isError,
+    } = useQuery({
+        queryKey: ["expenses"],
+        queryFn: async () => await getExpenses(),
+    });
+
 
     useEffect(() => {
-        // Load user categories
-        const storedCategories = localStorage.getItem("selectedCategory");
-        if (storedCategories) {
-            try {
-                const parsed = JSON.parse(storedCategories) as {
-                    categoryId: number;
-                    categoryName: string;
-                }[];
-                setUserCategories(parsed);
-            } catch (error) {
-                console.error("Error parsing categories:", error);
-            }
-        }
-
-        // Load expenses
-        const storedExpenses = localStorage.getItem("expenses");
-        if (storedExpenses) {
-            try {
-                const parsed = JSON.parse(storedExpenses) as ExpenseItem[];
-                setExpenses(parsed);
-            } catch (error) {
-                console.error("Error parsing expenses:", error);
-            }
-        }
-    }, []);
-
-    useEffect(() => {
-        if (expenses.length > 0 && categories.length > 0) {
-            const total = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+        if (expenses?.data?.length && categories.length > 0) {
+            const expensesData = expenses?.data;
+            const total = expensesData.reduce(
+                (acc: number, curr: { amount: number }) => acc + curr.amount,
+                0
+            );
             setTotalExpenses(total);
 
-            const breakdowns: CategoryBreakdown[] = categories.map((category) => {
-                const categoryExpenses = expenses.filter((expense) => expense.categoryId === category.id);
-                const categoryTotal = categoryExpenses.reduce((sum, expense) => sum + expense.amount, 0);
-                const categoryType = categories.find((type) => type.id === category.id) || categories[5];
+            // Group expenses by category
+            const categoryMap = new Map<string, expenseWithRelations[]>();
+
+            expensesData.forEach((expense) => {
+                const categoryName = expense.expenseCategory?.name;
+                if (categoryName) {
+                    if (!categoryMap.has(categoryName)) {
+                        categoryMap.set(categoryName, []);
+                    }
+                    categoryMap.get(categoryName)!.push(expense as expenseWithRelations);
+                }
+            });
+
+            // Create breakdown for each unique category
+            const breakdownExpenses = Array.from(categoryMap.entries()).map(([categoryName, categoryExpenses]) => {
+                const category = categories.find(cat => cat.name === categoryName);
+
+                // Calculate totals for this category
+                const categoryTotal = categoryExpenses.reduce(
+                    (sum: number, expense: { amount: number }) => sum + expense.amount,
+                    0
+                );
+
+                const transactionCount = categoryExpenses.length;
+                const averageAmount = categoryTotal / transactionCount;
+                const percentage = (categoryTotal / total) * 100;
 
                 // Find the most recent expense for this category
-                const sortedExpenses = categoryExpenses.sort(
-                    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+                const sortedExpenses = [...categoryExpenses].sort(
+                    (a: { createdAt: string | number | Date }, b: { createdAt: string | number | Date }) =>
+                        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
                 );
-                const lastExpenseDate = sortedExpenses.length > 0 ? sortedExpenses[0].date : "";
+
+                const lastExpenseDate =
+                    sortedExpenses.length > 0
+                        ? (typeof sortedExpenses[0].createdAt === 'string'
+                            ? sortedExpenses[0].createdAt
+                            : sortedExpenses[0].createdAt.toISOString())
+                        : "";
 
                 return {
-                    categoryId: category.id,
-                    categoryName: category.name,
+                    categoryId: category?.id as number,
+                    categoryName: categoryName,
                     totalAmount: categoryTotal,
-                    transactionCount: categoryExpenses.length,
-                    averageAmount: categoryExpenses.length > 0 ? categoryTotal / categoryExpenses.length : 0,
-                    percentage: total > 0 ? (categoryTotal / total) * 100 : 0,
+                    transactionCount: transactionCount,
+                    averageAmount: averageAmount,
+                    percentage: percentage,
                     lastExpenseDate,
-                    categoryType,
                 };
             });
 
             // Sort by total amount (highest first)
-            breakdowns.sort((a, b) => b.totalAmount - a.totalAmount);
-            setCategoryBreakdowns(breakdowns);
+            breakdownExpenses.sort((a, b) => b.totalAmount - a.totalAmount);
+            setCategoryBreakdowns(breakdownExpenses);
         }
     }, [expenses]);
 
-    if (expenses.length === 0) {
+
+    console.log('categoryBreakdowns', categoryBreakdowns);
+
+    if (expenses?.data?.length === 0) {
         return (
             <Card className="p-8">
                 <div className="text-center">
@@ -118,13 +124,16 @@ export function ExpenseCategoryBreakdown() {
                 <h2 className="text-2xl font-bold">Category Breakdown</h2>
                 <Badge variant="outline" className="text-sm">
                     {categoryBreakdowns.filter((cat) => cat.totalAmount > 0).length} of{" "}
-                    {userCategories.length} categories used
+                    {categories.length} categories used
                 </Badge>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {categoryBreakdowns.map((breakdown) => {
-                    const Icon = breakdown.categoryType.icon;
+                    const matchedCategory = categories.find((cat) => cat.name === breakdown.categoryName)
+                    const Icon = matchedCategory?.icon as React.ElementType;
+                    const categoryBackgroundColor = matchedCategory?.backgroundColor as string;
+                    const iconColor = matchedCategory?.color as string;
                     const hasExpenses = breakdown.totalAmount > 0;
 
                     return (
@@ -136,10 +145,10 @@ export function ExpenseCategoryBreakdown() {
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-3">
                                         <div
-                                            style={{ backgroundColor: breakdown.categoryType.backgroundColor }}
+                                            style={{ backgroundColor: categoryBackgroundColor }}
                                             className="rounded-xl p-2 size-12 flex items-center justify-center"
                                         >
-                                            <Icon size={24} color={breakdown.categoryType.color} />
+                                            <Icon size={24} color={iconColor} />
                                         </div>
                                         <div>
                                             <CardTitle className="text-lg">{breakdown.categoryName}</CardTitle>
@@ -172,7 +181,7 @@ export function ExpenseCategoryBreakdown() {
                                                 value={breakdown.percentage}
                                                 className="h-2"
                                                 style={{
-                                                    backgroundColor: breakdown.categoryType.backgroundColor,
+                                                    backgroundColor: categoryBackgroundColor,
                                                 }}
                                             />
                                         </div>
@@ -240,6 +249,9 @@ export function ExpenseCategoryBreakdown() {
                 })}
             </div>
 
+
+            {/**SPENDING SUMMARY CARD */}
+
             {totalExpenses > 0 && (
                 <Card className="p-6">
                     <h3 className="text-lg font-semibold mb-4">Spending Summary</h3>
@@ -249,13 +261,13 @@ export function ExpenseCategoryBreakdown() {
                             <p className="text-sm text-muted-foreground">Total Spent</p>
                         </div>
                         <div>
-                            <p className="text-2xl font-bold">{expenses.length}</p>
+                            <p className="text-2xl font-bold">{expenses?.data?.length}</p>
                             <p className="text-sm text-muted-foreground">Total Transactions</p>
                         </div>
                         <div>
                             <p className="text-2xl font-bold">
                                 ₱
-                                {(totalExpenses / expenses.length).toLocaleString(undefined, {
+                                {(totalExpenses / (expenses?.data?.length ?? 0)).toLocaleString(undefined, {
                                     maximumFractionDigits: 2,
                                 })}
                             </p>

@@ -1,22 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { headers } from "next/headers";
 import z from "zod";
-import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import type { incomeItem, incomeItems } from "@/types";
-
-/**
- * Helper function to get and validate user session
- * Returns the session user or null if unauthorized
- */
-async function getAuthenticatedUser() {
-	const session = await auth.api.getSession({
-		headers: await headers(),
-	});
-	return session?.user || null;
-}
+import { getAuthenticatedUser, UNAUTHORIZED_RESPONSE } from "@/lib/server";
+import type { Frequency, incomeItem, incomeItems } from "@/types";
 
 const incomeFormSchema = z.object({
 	amount: z.number().positive("Amount must be greater than 0"),
@@ -25,7 +13,7 @@ const incomeFormSchema = z.object({
 	income_name: z.string().min(1, "Income name is required"),
 });
 
-export async function getIncome(): Promise<{ data: incomeItem[] | null }> {
+export async function getIncome() {
 	const user = await getAuthenticatedUser();
 
 	if (!user) {
@@ -40,10 +28,15 @@ export async function getIncome(): Promise<{ data: incomeItem[] | null }> {
 			orderBy: {
 				createdAt: "desc",
 			},
+			include: {
+				incomeSource: true,
+			}
 		});
 
 		return {
-			data: income as incomeItems,
+			data: income,
+			error: null,
+			message: "Income fetched successfully",
 		};
 	} catch (error) {
 		console.error("Error getting income", error);
@@ -53,15 +46,11 @@ export async function getIncome(): Promise<{ data: incomeItem[] | null }> {
 	}
 }
 
-export async function getUserInfo(): Promise<{ error: string | null; message: string; data: any }> {
+export async function getSummary(): Promise<{ error: string | null; message: string; data: any }> {
 	const user = await getAuthenticatedUser();
 
 	if (!user) {
-		return {
-			error: "Unauthorized",
-			message: "Unauthorized",
-			data: null,
-		};
+		return UNAUTHORIZED_RESPONSE;
 	}
 	try {
 		const userInfo = await prisma.user.findUnique({
@@ -98,7 +87,7 @@ export async function deleteIncome(
 	const user = await getAuthenticatedUser();
 
 	if (!user) {
-		return { error: "Unauthorized", message: "Unauthorized", data: null };
+		return UNAUTHORIZED_RESPONSE;
 	}
 
 	try {
@@ -121,17 +110,18 @@ export async function deleteIncome(
 
 //EDIT INCOME
 export async function editIncome(
-	formData: Partial<incomeItem>,
+	formData: {
+		amount: number;
+		source: string;
+		frequency: Frequency;
+		income_name: string;
+	},
 	id: string
 ): Promise<{ error: string | null; message: string; data: any }> {
 	const user = await getAuthenticatedUser();
 
 	if (!user) {
-		return { error: "Unauthorized", message: "Unauthorized", data: null };
-	}
-
-	if (!id) {
-		return { error: "Income ID is required", message: "Income ID is required", data: null };
+		return UNAUTHORIZED_RESPONSE;
 	}
 
 	try {
@@ -143,14 +133,33 @@ export async function editIncome(
 			return { error: parsedData.error.message, message: "Invalid data", data: null };
 		}
 
+		// Find the IncomeSources record by name to get its ID
+		const matchedIncomeSource = await prisma.incomeSources.findFirst({
+			where: {
+				name: {
+					equals: parsedData.data?.source as string,
+				},
+			},
+		});
+
+		if (!matchedIncomeSource) {
+			return { error: "Income source not found", message: "Income source not found", data: null };
+		}
+
 		const updatedIncome = await prisma.income.update({
 			where: {
 				id,
 				userId: user.id, // Ensure user owns this income
 			},
 			data: {
-				...parsedData.data,
+				amount: formData.amount,
+				income_name: formData.income_name,
+				frequency: formData.frequency,
+				incomeSourceId: matchedIncomeSource.id,
 			},
+			include: {
+				incomeSource: true,
+			}
 		});
 
 		console.log("updatedIncome", updatedIncome);
