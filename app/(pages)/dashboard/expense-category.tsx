@@ -100,9 +100,9 @@ export default function ExpenseCategory() {
 							//category name, % of total expenses, total expenses
 							<div
 								key={`${item.id}-${index}`}
-								className="group flex col-span-12 cursor-pointer hover:bg-muted/50 transition-all duration-300 hover:shadow-md md:col-span-6 lg:col-span-4 items-center justify-between lg:gap-6 gap-4 bg-background border border-border p-4 rounded-lg"
+								className="group flex col-span-12 md:col-span-6 lg:col-span-4 items-center justify-between lg:gap-6 gap-4 bg-background border border-border p-4 rounded-lg"
 							>
-								<div className="flex flex-row items-center gap-4 w-full group-hover:opacity-70 transition-opacity duration-300">
+								<div className="flex flex-row items-center gap-4 w-full">
 									{/** ICON HERE */}
 									<div
 										style={{ backgroundColor: categoriesMatched.backgroundColor }}

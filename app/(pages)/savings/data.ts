@@ -1,7 +1,14 @@
-import { IconHeart, IconPigMoney, IconChartLine, IconCar, IconHome, IconPlane, IconTarget, IconWallet } from "@tabler/icons-react";
-import z from 'zod';
-
-
+import {
+    IconCar,
+    IconChartLine,
+    IconHeart,
+    IconHome,
+    IconPigMoney,
+    IconPlane,
+    IconTarget,
+    IconWallet,
+} from "@tabler/icons-react";
+import z from "zod";
 
 export type SavingsItem = {
     id: string;
@@ -12,19 +19,22 @@ export type SavingsItem = {
     currentAmount: number;
     goalAmount: number;
     notes?: string;
-    date: string;
-    lastUpdated: string;
+    updatedAt: Date;
+    createdAt: Date;
 };
 
 export const savingsSchema = z.object({
     name: z.string().min(1, "Savings name is required"),
-    type: z.string().min(1, "Please select a savings type"),
-    bankName: z.string().min(1, "Bank name is required"),
+    type: z.enum(["emergency", "vacation", "house", "car", "retirement", "wedding", "education", "other"]),
+    bankName: z.string().optional(),
     accountNumber: z.string().optional(),
-    currentAmount: z.number().min(0, "Current amount must be 0 or greater"),
+    currentAmount: z.number().positive("Current amount must be greater than 0"),
     goalAmount: z.number().positive("Goal amount must be greater than 0"),
     notes: z.string().optional(),
 });
+
+// Schema for editing - all fields are optional
+export const editSavingsSchema = savingsSchema.partial();
 
 export const savingsIcons: Record<
     string,

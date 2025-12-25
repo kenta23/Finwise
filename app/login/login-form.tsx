@@ -21,10 +21,10 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"form">)
 				<div className="flex flex-col items-center gap-1 text-center">
 					<h1 className="text-2xl font-bold">Login to your account</h1>
 					<p className="text-muted-foreground text-sm text-balance">
-						Enter your email below to login to your account
+						Sign in to your account to continue
 					</p>
 				</div>
-				<Field>
+				{/* <Field>
 					<FieldLabel htmlFor="email">Email</FieldLabel>
 					<Input id="email" type="email" placeholder="m@example.com" required />
 				</Field>
@@ -40,24 +40,23 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"form">)
 				<Field>
 					<Button type="submit">Login</Button>
 				</Field>
-				<FieldSeparator>Or continue with</FieldSeparator>
+				<FieldSeparator>Or continue with</FieldSeparator> */}
 				<Field>
 					<Button
 						variant="outline"
 						onClick={() => signIn.social({ provider: "google" })}
 						type="button"
-						className="cursor-pointer"
+						className="cursor-pointer border-2 border-violet-400"
 					>
-						{/** biome-ignore lint/a11y/noSvgWithoutTitle: <explanation> */}
 						<IconBrandGoogle className="size-4" />
 						<span>Login with Google</span>
 					</Button>
-					<FieldDescription className="text-center">
+					{/* <FieldDescription className="text-center">
 						Don&apos;t have an account?{" "}
 						<Link href="/signup" className="underline underline-offset-4">
 							Sign up
 						</Link>
-					</FieldDescription>
+					</FieldDescription> */}
 				</Field>
 			</FieldGroup>
 		</form>

@@ -34,19 +34,31 @@ async function main() {
 	const userId = user?.id;
 
 
-
-	await prisma.expenses.createMany({
+	await prisma.savings.createMany({
 		data: [
 			{
-				description: "Foodssss",
-				amount: 100,
-				userId: user?.id as string,
-				expenseCategoryId: "9c62aba6-3c3c-40aa-9912-96e5c01b6715",
-				incomeId: "2a358cee-3b05-4d68-b3e8-0c2cf77be034",
+				name: "Emergency Fund",
+				type: "emergency",
+				bankName: "BPI",
+				accountNumber: "1234567890",
+				currentAmount: 1000,
+				goalAmount: 10000,
+				notes: "This is my emergency fund",
+				userId: userId as string,
 			},
-		],
-	});
-	console.log(`✅ Seeded ${5} income sources and ${6} expense categories`);
+			{
+				name: "Vacation Fund",
+				type: "vacation",
+				bankName: "BPI",
+				accountNumber: "1234567890",
+				currentAmount: 1000,
+				goalAmount: 10000,
+				notes: "This is my vacation fund",
+				userId: userId as string,
+			},
+		]
+	})
+
 }
 main()
 	.catch((e) => {

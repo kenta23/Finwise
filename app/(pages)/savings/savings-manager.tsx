@@ -4,6 +4,7 @@ import {
     IconChartLine,
     IconEdit,
     IconEye,
+    IconLoader2,
     IconPigMoney,
     IconPlus,
     IconTarget,
@@ -11,9 +12,11 @@ import {
     IconTrendingUp,
     IconWallet,
 } from "@tabler/icons-react";
-import { useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { startTransition, useEffect, useOptimistic, useState } from "react";
 import { toast } from "sonner";
-import z from "zod";
+import type z from "zod";
+import { addSavings, deleteSavings, editSavings, getSavings } from "@/app/actions/savings";
 import { Button } from "../../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/card";
 import {
@@ -36,9 +39,14 @@ import {
     SelectValue,
 } from "../../../components/ui/select";
 import { Textarea } from "../../../components/ui/textarea";
-import { savingsSchema, SavingsItem, savingsIcons, savingsColors, savingsTypeLabels } from './data';
-import { useQuery } from "@tanstack/react-query";
-import { getSavings } from "@/app/actions/savings";
+import {
+    editSavingsSchema,
+    type SavingsItem,
+    savingsColors,
+    savingsIcons,
+    savingsSchema,
+    savingsTypeLabels,
+} from "./data";
 
 export function SavingsManager() {
     const [savingsItems, setSavingsItems] = useState<SavingsItem[]>([]);
@@ -47,41 +55,127 @@ export function SavingsManager() {
     const [editingItem, setEditingItem] = useState<SavingsItem | null>(null);
     const [viewingItem, setViewingItem] = useState<SavingsItem | null>(null);
     const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
-    const { data: savingsData, isLoading, isError } = useQuery({
+    const {
+        data: savingsData,
+        isLoading,
+        isError,
+    } = useQuery({
         queryKey: ["savings"],
-        queryFn: async () => await getSavings()
+        queryFn: async () => await getSavings(),
+    });
+    const queryClient = useQueryClient();
+
+    const { mutate: addSavingsMutation, isPending: isAddPending } = useMutation({
+        mutationKey: ["addSavings"],
+        mutationFn: async (
+            savingsItem: Omit<SavingsItem, "id" | "createdAt" | "updatedAt" | "userId">
+        ) => await addSavings(savingsItem),
+        onSuccess: (data) => {
+            if (data.error) {
+                toast.error(data.error, {
+                    description: data.message,
+                });
+            } else {
+                toast.success(data.message, {
+                    description: data.message,
+                });
+                queryClient.invalidateQueries({ queryKey: ["savings"] });
+                queryClient.invalidateQueries({ queryKey: ["summary"] });
+            }
+        },
+        onError: (error) => {
+            toast.error(error.message, {
+                description: error.message,
+            });
+        },
+    });
+
+    const { mutate: editSavingsMutation, isPending: isEditPending } = useMutation({
+        mutationKey: ["editSavings"],
+        mutationFn: async (savingsItem: Partial<SavingsItem>) => await editSavings(savingsItem),
+        onSuccess: (data) => {
+            if (data.error) {
+                toast.error(data.error, {
+                    description: data.message,
+                });
+            } else {
+                toast.success("Successful!", {
+                    description: data.message,
+                });
+                queryClient.invalidateQueries({ queryKey: ["savings"] });
+                queryClient.invalidateQueries({ queryKey: ["summary"] });
+            }
+        },
+        onError: (error) => {
+            toast.error(error.message, {
+                description: error.message,
+            });
+        },
+    });
+
+    const { mutate: deleteSavingsMutation, isPending: isDeletePending } = useMutation({
+        mutationKey: ["deleteSavings"],
+        mutationFn: async (id: string) => await deleteSavings(id),
+        onSuccess: (data) => {
+            if (data.error) {
+                toast.error(data.error, {
+                    description: data.message,
+                });
+            } else {
+                toast.success("Successful", {
+                    description: data.message,
+                });
+                queryClient.invalidateQueries({ queryKey: ["savings"] });
+                queryClient.invalidateQueries({ queryKey: ["summary"] });
+            }
+        },
+        onError: (error) => {
+            toast.error(error.message, {
+                description: "Failed to edit savings",
+            });
+        }
     })
 
-    console.log("savingsData", savingsData);
+    type OptimisticAction =
+        | { type: "add"; item: SavingsItem }
+        | { type: "edit"; item: SavingsItem }
+        | { type: "delete"; id: string };
+
+    const [optimisticSavingsData, optimisticUpdate] = useOptimistic(
+        savingsData?.data || [],
+        (state: SavingsItem[], action: OptimisticAction): SavingsItem[] => {
+            if (action.type === "add") {
+                return [...state, action.item];
+            }
+            if (action.type === "edit") {
+                return state.map((item) => (item.id === action.item.id ? action.item : item));
+            }
+            if (action.type === "delete") {
+                return state.filter((item) => item.id !== action.id);
+            }
+            return state;
+        }
+    );
 
     const [formData, setFormData] = useState({
         name: "",
-        type: "emergency",
+        type: "",
         bankName: "",
         accountNumber: "",
-        currentAmount: "",
-        goalAmount: "",
+        currentAmount: 0,
+        goalAmount: 0,
+        notes: "",
+    });
+    const [editFormData, setEditFormData] = useState({
+        name: "",
+        type: "",
+        bankName: "",
+        accountNumber: "",
+        currentAmount: 0,
+        goalAmount: 0,
         notes: "",
     });
     const [errors, setErrors] = useState<z.ZodError | null>(null);
-
-    // useEffect(() => {
-    //     const stored = localStorage.getItem("savings");
-    //     if (stored) {
-    //         try {
-    //             const parsed = JSON.parse(stored) as SavingsItem[];
-    //             setSavingsItems(parsed);
-    //         } catch (error) {
-    //             console.error("Error parsing savings items:", error);
-    //         }
-    //     }
-    // }, []);
-
-    const saveSavingsItems = (items: SavingsItem[]) => {
-        localStorage.setItem("savings", JSON.stringify(items));
-        setSavingsItems(items);
-        window.dispatchEvent(new Event("savingsUpdated"));
-    };
 
     const resetForm = () => {
         setFormData({
@@ -89,39 +183,86 @@ export function SavingsManager() {
             type: "emergency",
             bankName: "",
             accountNumber: "",
-            currentAmount: "",
-            goalAmount: "",
+            currentAmount: 0,
+            goalAmount: 0,
             notes: "",
         });
         setErrors(null);
     };
 
-    const handleAddSavings = () => {
+    /**
+     * Filters out empty values from an object
+     * Removes: empty strings (""), 0, null, undefined
+     * Keeps: non-empty strings, non-zero numbers, boolean values
+     * 
+     * @param data - The object to filter
+     * @returns A new object with only non-empty values
+     */
+    const filterEmptyValues = <T extends Record<string, unknown>>(data: T): Partial<T> => {
+        const filtered: Partial<T> = {};
+
+        for (const [key, value] of Object.entries(data)) {
+            // Skip undefined and null
+            if (value === undefined || value === null) {
+                continue;
+            }
+
+            // Skip empty strings
+            if (typeof value === "string" && value.trim() === "") {
+                continue;
+            }
+
+            // Skip zero for numbers (but keep if it's a valid number like 0.0)
+            if (typeof value === "number" && value === 0) {
+                continue;
+            }
+
+            // Include all other values (non-empty strings, non-zero numbers, booleans, objects, arrays)
+            (filtered as Record<string, unknown>)[key] = value;
+        }
+
+        return filtered;
+    };
+
+    const handleAddSavings = async () => {
+        console.log("formData", formData);
         try {
-            const parsed = savingsSchema.parse({
+            const parsedSavingsItem = savingsSchema.safeParse({
                 ...formData,
-                currentAmount: Number(formData.currentAmount) || 0,
+                currentAmount: Number(formData.currentAmount),
                 goalAmount: Number(formData.goalAmount),
             });
 
-            const newItem: SavingsItem = {
-                id: Date.now().toString(),
-                ...parsed,
-                date: new Date().toISOString(),
-                lastUpdated: new Date().toISOString(),
-            };
+            if (!parsedSavingsItem.success) {
+                setErrors(parsedSavingsItem.error as z.ZodError);
+                return;
+            }
 
-            const updatedItems = [...savingsItems, newItem];
-            saveSavingsItems(updatedItems);
+            setIsAddDialogOpen(false);
+            resetForm();
 
-            toast.success("Savings account added successfully", {
-                description: `${parsed.name} has been added to your savings list.`,
+            startTransition(() => {
+                optimisticUpdate({
+                    type: "add", item: {
+                        ...parsedSavingsItem.data,
+                        id: crypto.randomUUID(),
+                        bankName: parsedSavingsItem.data.bankName || "",
+                        accountNumber: parsedSavingsItem.data.accountNumber || "",
+                        notes: parsedSavingsItem.data.notes || "",
+                        createdAt: new Date(),
+                        updatedAt: new Date(),
+                    } as SavingsItem
+                });
+
+                addSavingsMutation({
+                    ...parsedSavingsItem.data,
+                    bankName: parsedSavingsItem.data.bankName || "",
+                });
             });
 
-            resetForm();
-            setIsAddDialogOpen(false);
+
         } catch (error) {
-            setErrors(error as z.ZodError);
+            console.error("Error adding savings", error);
         }
     };
 
@@ -129,39 +270,66 @@ export function SavingsManager() {
         if (!editingItem) return;
 
         try {
-            const parsed = savingsSchema.parse({
-                ...formData,
-                currentAmount: Number(formData.currentAmount) || 0,
-                goalAmount: Number(formData.goalAmount),
+            // Parse the form data with the edit schema (all fields optional)
+            const parsedData = editSavingsSchema.parse({
+                name: editFormData.name || undefined,
+                type: editFormData.type || undefined,
+                bankName: editFormData.bankName || undefined,
+                accountNumber: editFormData.accountNumber || undefined,
+                currentAmount: editFormData.currentAmount ? Number(editFormData.currentAmount) : undefined,
+                goalAmount: editFormData.goalAmount ? Number(editFormData.goalAmount) : undefined,
+                notes: editFormData.notes || undefined,
             });
 
-            const updatedItems = savingsItems.map((item) =>
-                item.id === editingItem.id
-                    ? { ...item, ...parsed, lastUpdated: new Date().toISOString() }
-                    : item
-            );
+            // Filter out empty values (empty strings, 0, null, undefined)
+            const filteredData = filterEmptyValues(parsedData);
 
-            saveSavingsItems(updatedItems);
+            // Build update data with only non-empty values
+            const updateData: Partial<SavingsItem> & { id: string } = {
+                id: editingItem.id,
+                ...filteredData,
+            };
 
-            toast.success("Savings account updated successfully", {
-                description: `${parsed.name} has been updated.`,
-            });
+            // Handle accountNumber and notes - convert empty strings to undefined (not null, as SavingsItem uses optional string)
+            if (updateData.accountNumber === "") {
+                delete updateData.accountNumber;
+            }
+            if (updateData.notes === "") {
+                delete updateData.notes;
+            }
 
+            console.log("updateData", updateData);
+
+            // Reset form and close dialog
             resetForm();
             setIsEditDialogOpen(false);
             setEditingItem(null);
+
+            startTransition(() => {
+                // Optimistic update with merged data
+                optimisticUpdate({
+                    type: "edit",
+                    item: {
+                        ...editingItem,
+                        ...updateData,
+                        updatedAt: new Date(),
+                    } as SavingsItem,
+                });
+
+                // Send only non-empty data to server
+                editSavingsMutation(updateData);
+            });
         } catch (error) {
             setErrors(error as z.ZodError);
         }
     };
 
     const handleDeleteSavings = (id: string) => {
-        const item = savingsItems.find((i) => i.id === id);
-        const updatedItems = savingsItems.filter((item) => item.id !== id);
-        saveSavingsItems(updatedItems);
+        if (!id) return;
 
-        toast.success("Savings account deleted", {
-            description: `${item?.name} has been removed from your savings list.`,
+        startTransition(() => {
+            optimisticUpdate({ type: "delete", id });
+            deleteSavingsMutation(id);
         });
     };
 
@@ -172,8 +340,8 @@ export function SavingsManager() {
             type: item.type,
             bankName: item.bankName,
             accountNumber: item.accountNumber || "",
-            currentAmount: item.currentAmount.toString(),
-            goalAmount: item.goalAmount.toString(),
+            currentAmount: item.currentAmount,
+            goalAmount: item.goalAmount,
             notes: item.notes || "",
         });
         setIsEditDialogOpen(true);
@@ -181,13 +349,20 @@ export function SavingsManager() {
     };
 
     const openViewDialog = (item: SavingsItem) => {
+        console.log("item", item);
         setViewingItem(item);
         setIsViewDialogOpen(true);
     };
 
     const calculateTotals = () => {
-        const totalCurrent = savingsData?.data?.reduce((acc: number, item: SavingsItem) => acc + item.currentAmount, 0);
-        const totalGoal = savingsData?.data?.reduce((acc: number, item: SavingsItem) => acc + item.goalAmount, 0);
+        const totalCurrent = savingsData?.data?.reduce(
+            (acc: number, item: SavingsItem) => acc + item.currentAmount,
+            0
+        );
+        const totalGoal = savingsData?.data?.reduce(
+            (acc: number, item: SavingsItem) => acc + item.goalAmount,
+            0
+        );
         const totalRemaining = totalGoal - totalCurrent;
         const overallProgress = totalGoal > 0 ? (totalCurrent / totalGoal) * 100 : 0;
 
@@ -284,9 +459,9 @@ export function SavingsManager() {
 
                             <div className="grid gap-4 py-4">
                                 <div className="grid gap-2">
-                                    <Label htmlFor="name">Savings Name</Label>
+                                    <Label htmlFor="savings-name">Savings Name</Label>
                                     <Input
-                                        id="name"
+                                        id="savings-name"
                                         placeholder="e.g., Emergency Fund, Vacation Savings"
                                         value={formData.name}
                                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -378,7 +553,7 @@ export function SavingsManager() {
                                                 className="pl-6"
                                                 value={formData.currentAmount}
                                                 onChange={(e) =>
-                                                    setFormData({ ...formData, currentAmount: e.target.value })
+                                                    setFormData({ ...formData, currentAmount: Number(e.target.value) })
                                                 }
                                             />
                                         </div>
@@ -396,12 +571,12 @@ export function SavingsManager() {
                                             <Input
                                                 id="goalAmount"
                                                 type="number"
-                                                min="0.01"
+                                                min="1"
                                                 step="0.01"
                                                 placeholder="0.00"
                                                 className="pl-6"
                                                 value={formData.goalAmount}
-                                                onChange={(e) => setFormData({ ...formData, goalAmount: e.target.value })}
+                                                onChange={(e) => setFormData({ ...formData, goalAmount: Number(e.target.value) })}
                                             />
                                         </div>
                                         {getErrorMessage("goalAmount") && (
@@ -432,8 +607,8 @@ export function SavingsManager() {
                                 >
                                     Cancel
                                 </Button>
-                                <Button className="cursor-pointer" onClick={handleAddSavings}>
-                                    Add Savings
+                                <Button className="cursor-pointer" onClick={handleAddSavings} disabled={isAddPending}>
+                                    {isAddPending ? <IconLoader2 className="animate-spin" size={16} /> : "Add Savings"}
                                 </Button>
                             </DialogFooter>
                         </DialogContent>
@@ -442,7 +617,7 @@ export function SavingsManager() {
 
                 {/* Savings Items Grid */}
                 <div className="grid grid-cols-12 gap-4">
-                    {savingsData?.data?.length === 0 ? (
+                    {optimisticSavingsData?.length === 0 ? (
                         <div className="col-span-12 flex flex-col items-center justify-center py-12 text-center">
                             <IconPigMoney size={64} className="text-muted-foreground mb-4" />
                             <h3 className="text-lg font-semibold mb-2">No savings accounts yet</h3>
@@ -455,7 +630,7 @@ export function SavingsManager() {
                             </Button>
                         </div>
                     ) : (
-                        savingsData?.data?.map((item: SavingsItem) => {
+                        optimisticSavingsData?.map((item: SavingsItem) => {
                             const Icon = savingsIcons[item.type] || IconWallet;
                             const colors = savingsColors[item.type] || {
                                 color: "#1a64db",
@@ -509,6 +684,7 @@ export function SavingsManager() {
                                                 size="icon"
                                                 className="cursor-pointer hover:bg-red-100 hover:text-red-600"
                                                 onClick={() => handleDeleteSavings(item.id)}
+                                                disabled={isDeletePending}
                                             >
                                                 <IconTrash size={18} />
                                             </Button>
@@ -557,8 +733,11 @@ export function SavingsManager() {
                             <Input
                                 id="edit-name"
                                 placeholder="e.g., Emergency Fund, Vacation Savings"
-                                value={formData.name}
-                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                value={formData.name || editFormData.name}
+                                onChange={(e) => {
+                                    setFormData({ ...formData, name: e.target.value })
+                                    setEditFormData({ ...editFormData, name: e.target.value })
+                                }}
                             />
                             {getErrorMessage("name") && (
                                 <p className="text-sm text-red-500">{getErrorMessage("name")}</p>
@@ -569,10 +748,13 @@ export function SavingsManager() {
                             <div className="grid gap-2">
                                 <Label htmlFor="edit-type">Savings Type</Label>
                                 <Select
-                                    value={formData.type}
-                                    onValueChange={(value) => setFormData({ ...formData, type: value })}
+                                    value={formData.type || editFormData.type}
+                                    onValueChange={(value) => {
+                                        setFormData({ ...formData, type: value })
+                                        setEditFormData({ ...editFormData, type: value })
+                                    }}
                                 >
-                                    <SelectTrigger className="cursor-pointer">
+                                    <SelectTrigger className="cursor-pointer w-full">
                                         <SelectValue placeholder="Select savings type" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -612,8 +794,11 @@ export function SavingsManager() {
                                 <Input
                                     id="edit-bankName"
                                     placeholder="e.g., BPI, BDO, Metrobank"
-                                    value={formData.bankName}
-                                    onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
+                                    value={formData.bankName || editFormData.bankName}
+                                    onChange={(e) => {
+                                        setFormData({ ...formData, bankName: e.target.value })
+                                        setEditFormData({ ...editFormData, bankName: e.target.value })
+                                    }}
                                 />
                                 {getErrorMessage("bankName") && (
                                     <p className="text-sm text-red-500">{getErrorMessage("bankName")}</p>
@@ -626,8 +811,11 @@ export function SavingsManager() {
                             <Input
                                 id="edit-accountNumber"
                                 placeholder="Enter account number"
-                                value={formData.accountNumber}
-                                onChange={(e) => setFormData({ ...formData, accountNumber: e.target.value })}
+                                value={formData.accountNumber || editFormData.accountNumber}
+                                onChange={(e) => {
+                                    setFormData({ ...formData, accountNumber: e.target.value })
+                                    setEditFormData({ ...editFormData, accountNumber: e.target.value })
+                                }}
                             />
                         </div>
 
@@ -642,11 +830,14 @@ export function SavingsManager() {
                                         id="edit-currentAmount"
                                         type="number"
                                         min="0"
-                                        step="0.01"
+                                        step="1"
                                         placeholder="0.00"
                                         className="pl-6"
-                                        value={formData.currentAmount}
-                                        onChange={(e) => setFormData({ ...formData, currentAmount: e.target.value })}
+                                        value={formData.currentAmount || editFormData.currentAmount}
+                                        onChange={(e) => {
+                                            setFormData({ ...formData, currentAmount: Number(e.target.value) })
+                                            setEditFormData({ ...editFormData, currentAmount: Number(e.target.value) })
+                                        }}
                                     />
                                 </div>
                                 {getErrorMessage("currentAmount") && (
@@ -663,12 +854,15 @@ export function SavingsManager() {
                                     <Input
                                         id="edit-goalAmount"
                                         type="number"
-                                        min="0.01"
-                                        step="0.01"
+                                        min="1"
+                                        step="1"
                                         placeholder="0.00"
                                         className="pl-6"
-                                        value={formData.goalAmount}
-                                        onChange={(e) => setFormData({ ...formData, goalAmount: e.target.value })}
+                                        value={formData.goalAmount || editFormData.goalAmount}
+                                        onChange={(e) => {
+                                            setFormData({ ...formData, goalAmount: Number(e.target.value) })
+                                            setEditFormData({ ...editFormData, goalAmount: Number(e.target.value) })
+                                        }}
                                     />
                                 </div>
                                 {getErrorMessage("goalAmount") && (
@@ -682,8 +876,11 @@ export function SavingsManager() {
                             <Textarea
                                 id="edit-notes"
                                 placeholder="Add any additional notes about this savings account..."
-                                value={formData.notes}
-                                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                                value={formData.notes || editFormData.notes}
+                                onChange={(e) => {
+                                    setFormData({ ...formData, notes: e.target.value })
+                                    setEditFormData({ ...editFormData, notes: e.target.value })
+                                }}
                                 rows={3}
                             />
                         </div>
@@ -697,11 +894,12 @@ export function SavingsManager() {
                                 setEditingItem(null);
                                 resetForm();
                             }}
+                            disabled={isEditPending}
                         >
                             Cancel
                         </Button>
-                        <Button className="cursor-pointer" onClick={handleEditSavings}>
-                            Update Savings
+                        <Button className="cursor-pointer" onClick={handleEditSavings} disabled={isEditPending}>
+                            {isEditPending ? <IconLoader2 className="animate-spin" size={16} /> : "Update Savings"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -709,7 +907,7 @@ export function SavingsManager() {
 
             {/* View Details Dialog */}
             <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-                <DialogContent className="min-w-2/5">
+                <DialogContent className="min-w-2/5 max-h-dvh overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Savings Account Details</DialogTitle>
                         <DialogDescription>View the details of your savings account.</DialogDescription>
@@ -799,7 +997,7 @@ export function SavingsManager() {
                                 <div className="space-y-1">
                                     <p className="text-sm text-muted-foreground">Date Created</p>
                                     <p className="text-sm font-medium">
-                                        {new Date(viewingItem.date).toLocaleDateString("en-US", {
+                                        {new Date(viewingItem.createdAt).toLocaleDateString("en-US", {
                                             year: "numeric",
                                             month: "long",
                                             day: "numeric",
@@ -812,7 +1010,7 @@ export function SavingsManager() {
                                 <div className="space-y-1">
                                     <p className="text-sm text-muted-foreground">Last Updated</p>
                                     <p className="text-sm font-medium">
-                                        {new Date(viewingItem.lastUpdated).toLocaleDateString("en-US", {
+                                        {new Date(viewingItem.updatedAt).toLocaleDateString("en-US", {
                                             year: "numeric",
                                             month: "long",
                                             day: "numeric",
@@ -903,6 +1101,7 @@ export function SavingsManager() {
                                     openEditDialog(viewingItem);
                                 }
                             }}
+                            disabled={isEditPending}
                         >
                             <IconEdit size={18} className="mr-2" />
                             Edit
