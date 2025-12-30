@@ -91,6 +91,7 @@ export function QuickAddDialog({
 			queryClient.invalidateQueries({ queryKey: ["expenses"] });
 			queryClient.invalidateQueries({ queryKey: ["expenses-categories"] });
 			queryClient.invalidateQueries({ queryKey: ["summary"] });
+			queryClient.invalidateQueries({ queryKey: ["summary-redis"] });
 		}
 	}
 
@@ -116,6 +117,7 @@ export function QuickAddDialog({
 			queryClient.invalidateQueries({ queryKey: ["income"] });
 			queryClient.invalidateQueries({ queryKey: ["summary"] });
 			queryClient.invalidateQueries({ queryKey: ["income-charts-data"] });
+			queryClient.invalidateQueries({ queryKey: ["summary-redis"] });
 		}
 	}
 

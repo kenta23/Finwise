@@ -84,6 +84,8 @@ export function IncomeManager() {
                 description: "Income has been removed from your income list.",
             });
             queryClient.invalidateQueries({ queryKey: ["income"] });
+            queryClient.invalidateQueries({ queryKey: ["summary"] });
+            queryClient.invalidateQueries({ queryKey: ["summary-redis"] });
             setDeletingItemId(null);
         },
         onError: (error) => {

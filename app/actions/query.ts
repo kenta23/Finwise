@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import z from "zod";
 import prisma from "@/lib/prisma";
+import { redis } from "@/lib/redis";
 import { getAuthenticatedUser, UNAUTHORIZED_RESPONSE } from "@/lib/server";
 import type { expenseType, incomeSourcesType } from "@/types";
 
@@ -152,6 +153,10 @@ export async function quickAdd(data: { income: incomeSourcesType[]; expense: exp
             });
             console.log("new income", newIncome);
 
+            // if (newIncome.count) {
+            //     await getSummaryFromRedis();
+            // }
+
             revalidatePath("/", "layout");
             revalidatePath("/income");
             revalidatePath("/dashboard");
@@ -172,9 +177,13 @@ export async function quickAdd(data: { income: incomeSourcesType[]; expense: exp
     }
 
     //****  HANDLE EXPENSE ***** //
-    if (data.expense && data.expense.amount > 0 &&
-        data.expense.category && data.expense.description && data.expense.fundIncome !== "") {
-
+    if (
+        data.expense &&
+        data.expense.amount > 0 &&
+        data.expense.category &&
+        data.expense.description &&
+        data.expense.fundIncome !== ""
+    ) {
         const expenseData = expensesSchema.safeParse({
             amount: data.expense.amount,
             category: data.expense.category,
@@ -259,4 +268,48 @@ export async function quickAdd(data: { income: incomeSourcesType[]; expense: exp
         message: "Please provide income or expense data",
         data: null,
     };
+}
+
+export async function getSummaryFromRedis() {
+    const user = await getAuthenticatedUser();
+    if (!user) {
+        return UNAUTHORIZED_RESPONSE;
+    }
+    const cacheKey = `summary_${user.id}`;
+
+    // Try to get data from Redis
+    const cachedData = await redis.get(cacheKey);
+
+    if (cachedData) {
+        console.log("Returning from Cache 🚀");
+        console.log("cachedData", cachedData);
+        // Upstash SDK automatically parses JSON
+        return cachedData;
+    }
+
+    // 2. If not in Redis, fetch from Prisma (Database)
+    console.log("Cache Miss. Fetching from DB 🐢");
+
+    const [incomeSum, expenseSum, savingsSum] = await Promise.all([
+        prisma.income.aggregate({ where: { userId: user.id }, _sum: { amount: true } }),
+        prisma.expenses.aggregate({ where: { userId: user.id }, _sum: { amount: true } }),
+        prisma.savings.aggregate({ where: { userId: user.id }, _sum: { currentAmount: true } }),
+    ]);
+
+    const income = incomeSum._sum.amount || 0;
+    const expenses = expenseSum._sum.amount || 0;
+    const savings = savingsSum._sum.currentAmount || 0;
+
+    const summary = {
+        income,
+        expenses,
+        savings,
+        balance: income - expenses - savings,
+    };
+
+    //  Save to Redis so next time is fast
+    // set a TTL (Time To Live) of 24 hours (86400 seconds)
+    await redis.set(cacheKey, JSON.stringify(summary), { ex: 86400 });
+
+    return summary;
 }

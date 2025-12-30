@@ -3,12 +3,27 @@ import ExpenseCategory from "@/app/(pages)/dashboard/expense-category";
 import { IncomeChart } from "@/app/(pages)/dashboard/income-chart";
 import { SectionCards } from "@/app/(pages)/dashboard/section-cards";
 import { DataTable } from "@/components/data-table";
-import data from "@/data.json";
+
 
 export const metadata: Metadata = {
-	title: "Budgety - Dashboard",
-	description: "Dashboard of your budget and income and expenses.",
-	applicationName: "Budgety",
+	title: "Finwise - Dashboard",
+	description: "Finwise is a budget management tool that helps you track your income and expenses.",
+	applicationName: "Finwise",
+	keywords: ["Finwise", "Budget", "Finance", "Income", "Expenses", "Savings", "Tracker", "Financial", "Management"],
+	authors: [{ name: "Rm Ramos", url: "https://portfolio-rmramos.vercel.app/" }],
+	creator: "Rm Ramos",
+	publisher: "Rm Ramos",
+	openGraph: {
+		title: "Finwise - Dashboard",
+		description: "Finwise is a budget management tool that helps you track your income and expenses.",
+		url: "https://finwise-budget-tracker.vercel.app/dashboard",
+		images: ["/images/logo.png"],
+		countryName: "Philippines",
+		emails: ["rustymiguelramos@gmail.com"],
+		siteName: "Finwise",
+		locale: "en_PH",
+		type: "website",
+	},
 };
 
 export default function Page() {

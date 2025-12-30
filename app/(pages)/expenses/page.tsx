@@ -3,11 +3,25 @@ import { ExpenseCategoryBreakdown } from "@/app/(pages)/expenses/expense-categor
 import { ExpenseManager } from "@/app/(pages)/expenses/expense-manager";
 
 export const metadata: Metadata = {
-    title: "Budgety - Expenses List",
-    description: "Expenses of your budget",
-    applicationName: "Budgety",
+    title: "Finwise - Expenses",
+    description: "Track your expenses and manage your finances.",
+    applicationName: "Finwise",
+    keywords: ["Finwise", "Budget", "Finance", "Income", "Expenses", "Savings", "Tracker", "Financial", "Management"],
+    authors: [{ name: "Rm Ramos", url: "https://portfolio-rmramos.vercel.app/" }],
+    creator: "Rm Ramos",
+    publisher: "Rm Ramos",
+    openGraph: {
+        title: "Finwise - Expenses",
+        description: "Track your expenses and manage your finances.",
+        url: "https://finwise-budget-tracker.vercel.app/expenses",
+        images: ["/images/logo.png"],
+        countryName: "Philippines",
+        emails: ["rustymiguelramos@gmail.com"],
+        siteName: "Finwise",
+        locale: "en_PH",
+        type: "website",
+    },
 };
-
 export default function Page() {
     // Expenses page with full functionality
     return (

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import z from "zod";
 import prisma from "@/lib/prisma";
+import { redis } from "@/lib/redis";
 import { getAuthenticatedUser, UNAUTHORIZED_RESPONSE } from "@/lib/server";
 import type { Frequency, incomeItem, incomeItems } from "@/types";
 
@@ -30,7 +31,7 @@ export async function getIncome() {
 			},
 			include: {
 				incomeSource: true,
-			}
+			},
 		});
 
 		return {
@@ -64,13 +65,21 @@ export async function getSummary(): Promise<{ error: string | null; message: str
 			},
 		});
 
-		console.log("userInfo", userInfo);
+		if (userInfo) {
+			const reducedIncome = userInfo.incomes.reduce((acc, curr) => acc + curr.amount, 0);
+			const reducedExpenses = userInfo.expenses.reduce((acc, curr) => acc + curr.amount, 0);
+			const reducedSavings = userInfo.savings.reduce((acc, curr) => acc + curr.currentAmount, 0);
+			const reducedBalance = reducedIncome - reducedExpenses - reducedSavings;
 
-		return {
-			error: null,
-			message: "Income fetched successfully",
-			data: userInfo,
-		};
+			console.log('Reduced Value', reducedIncome)
+			return {
+				error: null,
+				message: "Income fetched successfully",
+				data: [userInfo, { income: reducedIncome, expenses: reducedExpenses, savings: reducedSavings, balance: reducedBalance }],
+			};
+		}
+
+		return UNAUTHORIZED_RESPONSE;
 	} catch (error) {
 		console.log("Error getting income", error);
 		return {
@@ -159,7 +168,7 @@ export async function editIncome(
 			},
 			include: {
 				incomeSource: true,
-			}
+			},
 		});
 
 		console.log("updatedIncome", updatedIncome);

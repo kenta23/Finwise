@@ -40,11 +40,11 @@ export const sidebarItems = {
 			url: "/expenses",
 			icon: IconListDetails,
 		},
-		{
-			title: "Analytics",
-			url: "#",
-			icon: IconChartBar,
-		},
+		// {
+		// 	title: "Analytics",
+		// 	url: "#",
+		// 	icon: IconChartBar,
+		// },
 		{
 			title: "Savings",
 			url: "/savings",
