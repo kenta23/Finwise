@@ -1,0 +1,12 @@
+
+Todo:
+  ☐ Add Loading states (loader, skeleton)
+  ☐ Add error states 
+  ☐ make scalable edit function on income and expenses
+  ☐ invalidate query on summary from updating expenses and income 
+
+
+  Computation for percentage of increase and decrease 
+
+  percentage = val 
+

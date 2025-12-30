@@ -180,7 +180,16 @@ export function SavingsManager() {
     const resetForm = () => {
         setFormData({
             name: "",
-            type: "emergency",
+            type: "",
+            bankName: "",
+            accountNumber: "",
+            currentAmount: 0,
+            goalAmount: 0,
+            notes: "",
+        });
+        setEditFormData({
+            name: "",
+            type: "",
             bankName: "",
             accountNumber: "",
             currentAmount: 0,

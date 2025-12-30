@@ -606,17 +606,12 @@ export function IncomeManager() {
                                             variant="ghost"
                                             size="icon"
                                             className="cursor-pointer hover:bg-red-100 hover:text-red-600"
-                                            disabled={isDeletePending}
                                             onClick={() => {
                                                 setDeletingItemId(item.id);
                                                 handleDeleteIncome(item.id);
                                             }}
                                         >
-                                            {isDeletePending && item.id === deletingItemId ? (
-                                                <IconLoader2 className="animate-spin" size={18} />
-                                            ) : (
-                                                <IconTrash size={18} />
-                                            )}
+                                            <IconTrash size={18} />
                                         </Button>
                                     </div>
                                 </div>

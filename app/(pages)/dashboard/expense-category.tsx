@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import z from "zod";
 import { getCategories, getExpenses } from "@/app/actions/expenses";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { categoryType } from "@/types";
 import { categories } from "../../../data";
 
@@ -41,7 +42,17 @@ export default function ExpenseCategory() {
 		return (
 			<div className="w-full h-auto py-3">
 				<h3 className="text-lg mb-4 font-semibold text-muted-foreground">Expenses Categories</h3>
-				<div className="text-sm text-muted-foreground">Loading expenses...</div>
+
+
+
+				<div className="col-span-12 gap-4 grid grid-cols-12 w-full">
+					{Array.from({ length: 6 }).map((_, index) => (
+						<div key={index} className="col-span-12 flex w-full md:col-span-6 lg:col-span-4 items-center justify-between lg:gap-6 gap-4 p-4 rounded-lg">
+							<Skeleton className="flex bg-gray-200 flex-row items-center gap-4 w-full h-16" />
+						</div>
+					))}
+				</div>
+
 			</div>
 		);
 	}
@@ -73,8 +84,9 @@ export default function ExpenseCategory() {
 						// 		};
 						// 	}) || [];
 
-
-						const categories = categoriesData?.data?.find((cat: { name: string }) => cat.name === item.name)
+						const categories = categoriesData?.data?.find(
+							(cat: { name: string }) => cat.name === item.name
+						);
 
 						if (!categories) return null;
 
@@ -84,14 +96,20 @@ export default function ExpenseCategory() {
 							color: item.color,
 						};
 
-						const categoryAmount = categories?.expenses.reduce((acc: number, curr: { amount: number }) => acc + curr.amount, 0) || 0;
+						const categoryAmount =
+							categories?.expenses.reduce(
+								(acc: number, curr: { amount: number }) => acc + curr.amount,
+								0
+							) || 0;
 
 						const getCategoryTotal = (category: { expenses: { amount: number }[] }) =>
 							category.expenses.reduce((sum, expense) => sum + expense.amount, 0);
 
-						const totalExpenses = categoriesData?.data?.reduce((sum, category) => sum + getCategoryTotal(category), 0) ?? 0;
-
-
+						const totalExpenses =
+							categoriesData?.data?.reduce(
+								(sum, category) => sum + getCategoryTotal(category),
+								0
+							) ?? 0;
 
 						console.log("totalExpenses", totalExpenses);
 						const percentage = totalExpenses > 0 ? (categoryAmount / totalExpenses) * 100 : 0;

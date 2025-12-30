@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { TrendingUp } from "lucide-react";
+import { Loader2, TrendingUp } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Pie, PieChart } from "recharts";
 import { getIncome } from "@/app/actions/income";
@@ -19,6 +19,7 @@ import {
 	ChartTooltip,
 	ChartTooltipContent,
 } from "@/components/ui/chart";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export const description = "A simple pie chart";
 
@@ -111,6 +112,14 @@ export function IncomeChart() {
 							<Pie data={chartData} dataKey="amount" nameKey="source" />
 						</PieChart>
 					</ChartContainer>
+				) : isLoading ? (
+					<div className="flex items-center justify-center h-[250px] text-muted-foreground">
+						{/* <Skeleton className="flex bg-gray-200 flex-row items-center gap-4 w-full h-16" /> */}
+						{/**LOADER */}
+						<div className="flex items-center justify-center h-[250px]">
+							<Loader2 className="size-16 animate-spin text-violet-500" />
+						</div>
+					</div>
 				) : (
 					<div className="flex items-center justify-center h-[250px] text-muted-foreground">
 						No income data available. Add income sources to see the chart.

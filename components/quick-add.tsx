@@ -42,7 +42,7 @@ export function QuickAddDialog({
 	const [income, setIncome] = useState<incomeSourcesType[]>([
 		{
 			amount: 0,
-			source: "salary",
+			source: "",
 			income_name: "",
 			frequency: Frequency.PER_MONTH,
 		},
@@ -323,14 +323,15 @@ export function QuickAddDialog({
 										<SelectTrigger
 											id="income-source-0"
 											className="w-full cursor-pointer"
-											data-lpignore="true"
+
+											aria-label="Select a source"
 										>
 											<SelectValue defaultValue={income[0].source} placeholder="Select a source" />
 										</SelectTrigger>
 
 										<SelectContent className="cursor-pointer">
 											<SelectGroup>
-												<SelectLabel>Sources</SelectLabel>
+												<SelectLabel className="sr-only">Sources</SelectLabel>
 												{incomeSources.map((source) => (
 													<SelectItem className="cursor-pointer" value={source.name}>
 														{source.name}
@@ -540,9 +541,10 @@ export function QuickAddDialog({
 						<Button
 							type="button"
 							onClick={(e) => handleExpenseSubmit(e)}
+							disabled={isPending}
 							className="w-full cursor-pointer"
 						>
-							Save changes
+							{isPending ? <IconLoader2 className="animate-spin" /> : "Save changes"}
 						</Button>
 					</CardFooter>
 				</Card>

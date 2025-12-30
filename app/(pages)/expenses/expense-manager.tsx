@@ -120,10 +120,11 @@ export function ExpenseManager() {
         mutationKey: ["deleteExpense"],
         mutationFn: async (id: string) => await deleteExpense(id),
         onSuccess: (data) => {
-            toast.success(data.message, {
-                description: "Expense deleted successfully",
+            toast.success("Successful!", {
+                description: data.message,
             });
             queryClient.invalidateQueries({ queryKey: ["expenses"] });
+            queryClient.invalidateQueries({ queryKey: ["summary"] });
         },
         onError: (error) => {
             toast.error(error.message, {

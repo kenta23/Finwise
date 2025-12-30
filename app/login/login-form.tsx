@@ -48,7 +48,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"form">)
 						type="button"
 						className="cursor-pointer border-2 border-violet-400"
 					>
-						<IconBrandGoogle className="size-4" />
+						<IconBrandGoogle className="size-4 text-violet-400" />
 						<span>Login with Google</span>
 					</Button>
 					{/* <FieldDescription className="text-center">
