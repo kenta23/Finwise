@@ -109,6 +109,7 @@ export function ExpenseManager() {
                 description: "Expense added successfully",
             });
             queryClient.invalidateQueries({ queryKey: ["expenses"] });
+            queryClient.invalidateQueries({ queryKey: ["summary"] });
         },
         onError: (error) => {
             toast.error(error.message, {
@@ -125,6 +126,7 @@ export function ExpenseManager() {
             });
             queryClient.invalidateQueries({ queryKey: ["expenses"] });
             queryClient.invalidateQueries({ queryKey: ["summary"] });
+
         },
         onError: (error) => {
             toast.error(error.message, {
@@ -147,6 +149,7 @@ export function ExpenseManager() {
                 });
             }
             queryClient.invalidateQueries({ queryKey: ["expenses"] });
+            queryClient.invalidateQueries({ queryKey: ["summary"] });
         },
         onError: (error) => {
             toast.error("Failed to update expense", {
@@ -209,12 +212,6 @@ export function ExpenseManager() {
                 })
                 addExpenseMutation(parsedExpenseItem.data);
             })
-
-
-            toast.success("Expense added successfully", {
-                description: `${parsedExpenseItem.data.description} has been added to your expenses.`,
-            });
-
             resetForm();
             setIsAddDialogOpen(false);
         } catch (error) {
