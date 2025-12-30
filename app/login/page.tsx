@@ -1,4 +1,3 @@
-import { IconInnerShadowTop } from "@tabler/icons-react";
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import Image from "next/image";
@@ -6,9 +5,25 @@ import { redirect } from "next/navigation";
 import { LoginForm } from "@/app/login/login-form";
 import { auth } from "@/lib/auth";
 
-const metadata: Metadata = {
-	title: "Login - Budgety",
-	description: "Login to your Budgety account",
+export const metadata: Metadata = {
+	title: "Finwise - Login",
+	description: "Login to your Finwise account.",
+	applicationName: "Finwise",
+	keywords: ["Finwise", "Budget", "Finance", "Income", "Expenses", "Savings", "Tracker", "Financial", "Management"],
+	authors: [{ name: "Rm Ramos", url: "https://portfolio-rmramos.vercel.app/" }],
+	creator: "Rm Ramos",
+	publisher: "Rm Ramos",
+	openGraph: {
+		title: "Finwise - Dashboard",
+		description: "Finwise is a budget management tool that helps you track your income and expenses.",
+		url: "https://finwise-budget-tracker.vercel.app/login",
+		images: ["/images/logo.png"],
+		countryName: "Philippines",
+		emails: ["rustymiguelramos@gmail.com"],
+		siteName: "Finwise",
+		locale: "en_PH",
+		type: "website",
+	},
 };
 
 export default async function LoginPage() {
