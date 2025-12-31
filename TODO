@@ -1,9 +1,13 @@
 
 Todo:
-  ☐ Add Loading states (loader, skeleton)
-  ☐ Add error states 
-  ☐ make scalable edit function on income and expenses
-  ☐ invalidate query on summary from updating expenses and income 
+  ✔ Add Loading states (loader, skeleton) @done(25-12-30 22:53)
+  ✔ Add error states @done(25-12-30 22:53)
+  ✔ make scalable edit function on income and expenses @done(25-12-30 22:53)
+  ✔ invalidate query on summary from updating expenses and income @done(25-12-30 22:53)
+
+
+  December 31, 2025
+  ✔ Create a function that the expenses can't be greater than the specific income source (disable checkbox, etc.) @done(25-12-31 12:14)
 
 
   Computation for percentage of increase and decrease 

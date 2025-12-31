@@ -128,7 +128,7 @@ export function SectionCards() {
 
 
 	const remainingBalanceFn = () => {
-		if (remainingBalance.percentage > 0) {
+		if (data?.data[1].balance > 0) {
 			return (
 				<>
 					<div className="line-clamp-1 flex gap-2 font-medium">
@@ -138,7 +138,7 @@ export function SectionCards() {
 				</>
 			);
 		}
-		if (remainingBalance.percentage <= 0) {
+		if (data?.data[1].balance <= 0) {
 			return (
 				<>
 					<div className="line-clamp-1 flex gap-2 font-medium">

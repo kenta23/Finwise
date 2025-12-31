@@ -167,6 +167,16 @@ export function ExpenseManager() {
     });
     const [errors, setErrors] = useState<z.ZodError | null>(null);
 
+    // Reset fundIncomeId when amount exceeds selected income's amount
+    useEffect(() => {
+        if (formData.fundIncomeId && formData.amount) {
+            const selectedIncome = incomedata?.find((income) => income.id === formData.fundIncomeId);
+            if (selectedIncome && Number(formData.amount) > Number(selectedIncome.amount)) {
+                setFormData((prev) => ({ ...prev, fundIncomeId: "" }));
+            }
+        }
+    }, [formData.amount, formData.fundIncomeId, incomedata]);
+
     const resetForm = () => {
         setFormData({
             amount: "",
@@ -325,9 +335,7 @@ export function ExpenseManager() {
 
     const { totalExpenses, categoryTotals, topCategory } = calculateStats();
 
-    console.log("categoryTotals", categoryTotals);
-    console.log("topCategory", topCategory);
-    console.log("totalExpenses", totalExpenses);
+
 
     // Filter expenses
     const filteredExpenses = optimisticExpensesData?.filter((expense) => {
@@ -544,6 +552,7 @@ export function ExpenseManager() {
                                                     key={income.id}
                                                     value={income.id.toString()}
                                                     className="cursor-pointer"
+                                                    disabled={Number(formData.amount) > Number(income.amount)}
                                                 >
                                                     {income.income_name}
                                                 </SelectItem>
@@ -783,6 +792,7 @@ export function ExpenseManager() {
                                             key={income.id}
                                             value={income.id.toString()}
                                             className="cursor-pointer"
+                                            disabled={Number(formData.amount) > Number(income.amount)}
                                         >
                                             {income.income_name}
                                         </SelectItem>
