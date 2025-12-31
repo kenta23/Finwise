@@ -313,3 +313,60 @@ export async function getSummaryFromRedis() {
 
     return summary;
 }
+
+
+export async function resetAllData(): Promise<{ message: string; error: string | null }> {
+    const user = await getAuthenticatedUser();
+    if (!user) {
+        return {
+            message: "Unauthorized",
+            error: "Unauthorized",
+        };
+    }
+
+    try {
+        // Delete all user data in the correct order to respect foreign key constraints
+        // Expenses reference incomes, so delete expenses first, then incomes, then savings
+        await prisma.expenses.deleteMany({
+            where: {
+                userId: user.id,
+            },
+        });
+
+        // Delete savings and incomes in parallel (they don't reference each other)
+        await Promise.all([
+            prisma.savings.deleteMany({
+                where: {
+                    userId: user.id,
+                },
+            }),
+            prisma.income.deleteMany({
+                where: {
+                    userId: user.id,
+                },
+            }),
+        ]);
+
+        // Clear Redis cache for this user
+        const cacheKey = `summary_${user.id}`;
+        await redis.del(cacheKey);
+
+        // Revalidate all relevant paths
+        revalidatePath("/", "layout");
+        revalidatePath("/dashboard");
+        revalidatePath("/income");
+        revalidatePath("/expenses");
+        revalidatePath("/savings");
+
+        return {
+            message: "All data has been reset successfully",
+            error: null,
+        };
+    } catch (error) {
+        console.error("Error resetting all data:", error);
+        return {
+            message: "Failed to reset all data",
+            error: error instanceof Error ? error.message : "Unknown error occurred",
+        };
+    }
+}

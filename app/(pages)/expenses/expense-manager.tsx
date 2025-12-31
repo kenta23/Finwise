@@ -1,6 +1,5 @@
 "use client";
 
-
 import {
     IconCalendar,
     IconEdit,
@@ -14,10 +13,11 @@ import {
     IconWallet,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { startTransition, useEffect, useOptimistic, useState } from "react";
+import { startTransition, useCallback, useEffect, useOptimistic, useState } from "react";
 import { toast } from "sonner";
 import z from "zod";
 import { addExpense, deleteExpense, editExpense, getExpenses } from "@/app/actions/expenses";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useIncomeStore } from "@/lib/store";
 import type { expenseItem, expenseWithRelations } from "@/types";
 import { Badge } from "../../../components/ui/badge";
@@ -52,7 +52,6 @@ const expenseSchema = z.object({
     fundIncomeId: z.string().min(1, "Please select a income"),
 });
 
-
 type OptimisticExpensesAction = {
     type: "add" | "edit" | "delete";
     item?: Omit<expenseWithRelations, "userId" | "income">;
@@ -86,19 +85,28 @@ export function ExpenseManager() {
     const [searchTerm, setSearchTerm] = useState("");
     const [filterCategory, setFilterCategory] = useState<string>("all");
     const queryClient = useQueryClient();
-    const [optimisticExpensesData, optimisticUpdate] = useOptimistic(expensesData?.data as expenseWithRelations[], (state: expenseWithRelations[], action: OptimisticExpensesAction): expenseWithRelations[] => {
-        if (action.type === 'add') {
-            return [...(state || []), action.item as expenseWithRelations];
-        }
-        if (action.type === 'edit') {
-            return state?.map((item) => item?.id === action.id ? { ...item, ...action.item } as expenseWithRelations : item as expenseWithRelations) || null;
-        }
-        if (action.type === 'delete') {
-            return state?.filter((item) => item?.id !== action.id) || null;
-        }
+    const [optimisticExpensesData, optimisticUpdate] = useOptimistic(
+        expensesData?.data as expenseWithRelations[],
+        (state: expenseWithRelations[], action: OptimisticExpensesAction): expenseWithRelations[] => {
+            if (action.type === "add") {
+                return [...(state || []), action.item as expenseWithRelations];
+            }
+            if (action.type === "edit") {
+                return (
+                    state?.map((item) =>
+                        item?.id === action.id
+                            ? ({ ...item, ...action.item } as expenseWithRelations)
+                            : (item as expenseWithRelations)
+                    ) || null
+                );
+            }
+            if (action.type === "delete") {
+                return state?.filter((item) => item?.id !== action.id) || null;
+            }
 
-        return state;
-    })
+            return state;
+        }
+    );
 
     const { mutate: addExpenseMutation, isPending: isAddPending } = useMutation({
         mutationKey: ["addExpense"],
@@ -126,14 +134,13 @@ export function ExpenseManager() {
             });
             queryClient.invalidateQueries({ queryKey: ["expenses"] });
             queryClient.invalidateQueries({ queryKey: ["summary"] });
-
         },
         onError: (error) => {
             toast.error(error.message, {
                 description: "Failed to delete expense",
             });
         },
-    })
+    });
 
     const { mutate: editExpenseMutation, isPending: isEditPending } = useMutation({
         mutationKey: ["editExpense"],
@@ -156,7 +163,7 @@ export function ExpenseManager() {
                 description: error.message,
             });
         },
-    })
+    });
 
     const [formData, setFormData] = useState({
         amount: "",
@@ -167,15 +174,62 @@ export function ExpenseManager() {
     });
     const [errors, setErrors] = useState<z.ZodError | null>(null);
 
+    // Check if a specific income would exceed when combined with formData.amount
+    const wouldAmountExceedIncome = useCallback(
+        (incomeId: string, incomeAmount: number): boolean => {
+            if (!formData.amount || Number(formData.amount) <= 0) {
+                return false;
+            }
+
+            // Calculate existing expenses per income (without adding formData.amount)
+            const totalExpensesPerIncome =
+                optimisticExpensesData?.reduce(
+                    (acc, curr) => {
+                        const currIncomeId = curr.incomeId || "";
+                        if (!acc[currIncomeId]) {
+                            acc[currIncomeId] = 0;
+                        }
+                        acc[currIncomeId] += curr.amount;
+                        return acc;
+                    },
+                    {} as Record<string, number>
+                ) || {};
+
+            // Get existing expenses for this income, or 0 if none
+            const existingExpensesForIncome = totalExpensesPerIncome[incomeId] || 0;
+
+            // Calculate total: existing expenses + new expense amount
+            const totalExpensesWithNewAmount = existingExpensesForIncome + Number(formData.amount);
+
+            // Check if total expenses (existing + new) exceed the income amount
+            return totalExpensesWithNewAmount > Number(incomeAmount);
+        },
+        [formData.amount, optimisticExpensesData]
+    );
+
     // Reset fundIncomeId when amount exceeds selected income's amount
-    useEffect(() => {
+    const checkIfAmountExceedsIncome = useCallback(() => {
         if (formData.fundIncomeId && formData.amount) {
             const selectedIncome = incomedata?.find((income) => income.id === formData.fundIncomeId);
-            if (selectedIncome && Number(formData.amount) > Number(selectedIncome.amount)) {
-                setFormData((prev) => ({ ...prev, fundIncomeId: "" }));
+
+            if (!selectedIncome) {
+                return true;
             }
+
+            const exceeds = wouldAmountExceedIncome(formData.fundIncomeId, selectedIncome.amount);
+
+            if (exceeds) {
+                setFormData((prev) => ({ ...prev, fundIncomeId: "" }));
+                return true;
+            }
+
+            return false;
         }
-    }, [formData.amount, formData.fundIncomeId, incomedata]);
+    }, [formData.fundIncomeId, formData.amount, incomedata, wouldAmountExceedIncome]);
+
+    useEffect(() => {
+        checkIfAmountExceedsIncome();
+    }, [checkIfAmountExceedsIncome]);
 
     const resetForm = () => {
         setFormData({
@@ -201,7 +255,6 @@ export function ExpenseManager() {
                 return;
             }
 
-
             startTransition(() => {
                 optimisticUpdate({
                     type: "add",
@@ -217,11 +270,11 @@ export function ExpenseManager() {
                             id: crypto.randomUUID(),
                             createdAt: new Date(),
                             updatedAt: new Date(),
-                        }
-                    }
-                })
+                        },
+                    },
+                });
                 addExpenseMutation(parsedExpenseItem.data);
-            })
+            });
             resetForm();
             setIsAddDialogOpen(false);
         } catch (error) {
@@ -232,18 +285,18 @@ export function ExpenseManager() {
     const handleEditExpense = () => {
         if (!editingExpense) return;
 
-
         console.log("editingExpense", editingExpense);
-
 
         try {
             const parsedExpensesItem = expenseSchema.parse({
                 ...formData,
-                amount: Number(formData.amount)
+                amount: Number(formData.amount),
             });
             startTransition(() => {
                 optimisticUpdate({
-                    type: "edit", id: editingExpense.id, item: {
+                    type: "edit",
+                    id: editingExpense.id,
+                    item: {
                         ...parsedExpensesItem,
                         id: editingExpense.id,
                         createdAt: editingExpense.createdAt,
@@ -255,8 +308,8 @@ export function ExpenseManager() {
                             id: editingExpense.expenseCategory?.id ?? crypto.randomUUID(),
                             createdAt: editingExpense.expenseCategory?.createdAt ?? new Date(),
                             updatedAt: new Date(),
-                        }
-                    }
+                        },
+                    },
                 });
                 editExpenseMutation({ ...parsedExpensesItem, id: editingExpense.id });
             });
@@ -335,8 +388,6 @@ export function ExpenseManager() {
 
     const { totalExpenses, categoryTotals, topCategory } = calculateStats();
 
-
-
     // Filter expenses
     const filteredExpenses = optimisticExpensesData?.filter((expense) => {
         const matchesSearch =
@@ -361,13 +412,10 @@ export function ExpenseManager() {
         return categoryType ?? categories[5]; // Default to "Other" (index 5)
     };
 
-
     const getCategoryIconComponent = (categoryname: string) => {
         const Icon = getCategoryIcon(categoryname).icon;
-        return (
-            <Icon size={32} color={getCategoryIcon(categoryname).color} />
-        );
-    }
+        return <Icon size={32} color={getCategoryIcon(categoryname).color} />;
+    };
 
     return (
         <div className="w-full h-auto py-3">
@@ -552,7 +600,7 @@ export function ExpenseManager() {
                                                     key={income.id}
                                                     value={income.id.toString()}
                                                     className="cursor-pointer"
-                                                    disabled={Number(formData.amount) > Number(income.amount)}
+                                                    disabled={wouldAmountExceedIncome(income.id, income.amount)}
                                                 >
                                                     {income.income_name}
                                                 </SelectItem>
@@ -615,6 +663,17 @@ export function ExpenseManager() {
                     </Card>
                 )}
 
+                {isLoading && (
+                    //Skeleton loading
+                    <div className="grid grid-cols-12 gap-4">
+                        {Array.from({ length: 3 }).map((_, index) => (
+                            <div key={index} className="col-span-12 md:col-span-6 lg:col-span-4">
+                                <Skeleton className="w-full h-28 bg-gray-200" />
+                            </div>
+                        ))}
+                    </div>
+                )}
+
                 {/* Expenses List */}
                 {userCategories.length > 0 && (
                     <div className="grid grid-cols-12 gap-4">
@@ -628,14 +687,12 @@ export function ExpenseManager() {
                                             Start by adding your first expense to track your spending.
                                         </p>
 
-
                                         <Button onClick={() => setIsAddDialogOpen(true)} className="cursor-pointer">
                                             <IconPlus size={20} />
                                             <span>Add Your First Expense</span>
                                         </Button>
                                     </>
-                                )
-                                }
+                                )}
                             </div>
                         ) : (
                             filteredExpenses?.map((expense) => {
@@ -848,7 +905,8 @@ export function ExpenseManager() {
                             <div className="flex items-center gap-4">
                                 <div
                                     style={{
-                                        backgroundColor: getCategoryIcon(viewingExpense.expenseCategory?.name || "").backgroundColor,
+                                        backgroundColor: getCategoryIcon(viewingExpense.expenseCategory?.name || "")
+                                            .backgroundColor,
                                     }}
                                     className="rounded-xl p-3 size-16 flex items-center justify-center"
                                 >
@@ -895,7 +953,10 @@ export function ExpenseManager() {
                                     <div className="flex justify-between">
                                         <span className="text-sm">This Category Total</span>
                                         <span className="font-semibold">
-                                            ₱{(categoryTotals?.[viewingExpense.expenseCategory?.name || ""] || 0).toLocaleString()}
+                                            ₱
+                                            {(
+                                                categoryTotals?.[viewingExpense.expenseCategory?.name || ""] || 0
+                                            ).toLocaleString()}
                                         </span>
                                     </div>
                                     <div className="flex justify-between">
@@ -903,7 +964,8 @@ export function ExpenseManager() {
                                         <span className="font-semibold">
                                             {totalExpenses > 0
                                                 ? (
-                                                    ((categoryTotals?.[viewingExpense.expenseCategory?.name || ""] || 0) / totalExpenses) *
+                                                    ((categoryTotals?.[viewingExpense.expenseCategory?.name || ""] || 0) /
+                                                        totalExpenses) *
                                                     100
                                                 ).toFixed(1)
                                                 : 0}

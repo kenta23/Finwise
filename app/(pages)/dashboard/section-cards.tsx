@@ -28,19 +28,27 @@ const calculatePercentageChange = (
 ): { percentage: number; isPositive: boolean; formatted: string } => {
 	console.log("current percentage change", current);
 	console.log("previous percentage change", previous);
+
 	// Handle edge cases
 	if (previous === 0) {
 		if (current === 0) {
 			return { percentage: 0, isPositive: true, formatted: "0%" };
 		}
+		// When previous is 0 and current is not, treat as 100% increase (new data)
+		return {
+			percentage: 100,
+			isPositive: true,
+			formatted: "+100.0%"
+		};
 	}
 
+	// Calculate the actual change (not absolute) to determine direction
 	const change = ((current - previous) / previous) * 100;
 	const isPositive = change >= 0;
 	const formatted = `${isPositive ? "+" : ""}${change.toFixed(1)}%`;
 
 	return {
-		percentage: change,
+		percentage: Math.abs(change), // Return absolute value for percentage
 		isPositive,
 		formatted,
 	};
@@ -138,7 +146,7 @@ export function SectionCards() {
 				</>
 			);
 		}
-		if (data?.data[1].balance <= 0) {
+		if (data?.data[1].balance < 0) {
 			return (
 				<>
 					<div className="line-clamp-1 flex gap-2 font-medium">
@@ -150,7 +158,16 @@ export function SectionCards() {
 				</>
 			);
 		}
-		return null;
+		if (data?.data[1].balance === 0) return (
+			<>
+				<div className="line-clamp-1 flex gap-2 font-medium">
+					<p className="text-gray-500">No remaining balance</p>
+				</div>
+				<div className="text-muted-foreground">
+					You have no remaining balance yet
+				</div>
+			</>
+		);
 	};
 
 

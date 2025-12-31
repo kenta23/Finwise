@@ -557,13 +557,18 @@ export function SavingsManager() {
                                                 id="currentAmount"
                                                 type="number"
                                                 min="0"
-                                                step="0.01"
-                                                placeholder="0.00"
+                                                step="1"
+                                                placeholder="0"
                                                 className="pl-6"
-                                                value={formData.currentAmount}
-                                                onChange={(e) =>
-                                                    setFormData({ ...formData, currentAmount: Number(e.target.value) })
-                                                }
+                                                value={formData.currentAmount || ""}
+                                                onChange={(e) => {
+                                                    // Remove leading zeros from the input
+                                                    const value = e.target.value.replace(/^0+/, '');
+                                                    // If value is empty after removing leading zeros, set to 0
+                                                    // Otherwise, convert to number
+                                                    const numValue = value === '' ? 0 : Number(value);
+                                                    setFormData({ ...formData, currentAmount: Number.isNaN(numValue) ? 0 : numValue });
+                                                }}
                                             />
                                         </div>
                                         {getErrorMessage("currentAmount") && (
@@ -581,11 +586,18 @@ export function SavingsManager() {
                                                 id="goalAmount"
                                                 type="number"
                                                 min="1"
-                                                step="0.01"
-                                                placeholder="0.00"
+                                                step="1"
+                                                placeholder="0"
                                                 className="pl-6"
-                                                value={formData.goalAmount}
-                                                onChange={(e) => setFormData({ ...formData, goalAmount: Number(e.target.value) })}
+                                                value={formData.goalAmount || ""}
+                                                onChange={(e) => {
+                                                    // Remove leading zeros from the input
+                                                    const value = e.target.value.replace(/^0+/, '');
+                                                    // If value is empty after removing leading zeros, set to 1
+                                                    // Otherwise, convert to number
+                                                    const numValue = value === '' ? 0 : Number(value);
+                                                    setFormData({ ...formData, goalAmount: Number.isNaN(numValue) ? 0 : numValue });
+                                                }}
                                             />
                                         </div>
                                         {getErrorMessage("goalAmount") && (
