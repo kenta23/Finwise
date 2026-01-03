@@ -31,8 +31,10 @@ export async function getIncome() {
 			},
 			include: {
 				incomeSource: true,
+				expenses: true,
 			},
 		});
+
 
 		return {
 			data: income,
@@ -68,7 +70,7 @@ export async function getSummary(): Promise<{ error: string | null; message: str
 		if (userInfo) {
 			const reducedIncome = userInfo.incomes.reduce((acc, curr) => acc + curr.amount, 0);
 			const reducedExpenses = userInfo.expenses.reduce((acc, curr) => acc + curr.amount, 0);
-			const reducedSavings = userInfo.savings.reduce((acc, curr) => acc + curr.currentAmount, 0);
+			const reducedSavings = userInfo.savings.reduce((acc, curr) => acc + curr.amountToSave, 0);
 			const reducedBalance = reducedIncome - reducedExpenses - reducedSavings;
 
 			console.log('Reduced Value', reducedIncome)

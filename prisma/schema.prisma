@@ -125,6 +125,8 @@ model Savings {
    type String 
    bankName String 
    accountNumber String?
+   amountToSave Float @default(0)
+   frequency String @default("monthly")
    currentAmount Float @default(0)
    goalAmount Float @default(0)
    notes String?

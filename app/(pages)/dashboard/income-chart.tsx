@@ -1,8 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, TrendingUp } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
 import { Pie, PieChart } from "recharts";
 import { getIncome } from "@/app/actions/income";
 import {
@@ -19,7 +18,6 @@ import {
 	ChartTooltip,
 	ChartTooltipContent,
 } from "@/components/ui/chart";
-import { Skeleton } from "@/components/ui/skeleton";
 
 export const description = "A simple pie chart";
 
@@ -66,13 +64,10 @@ export function IncomeChart() {
 	const {
 		data: incomeData,
 		isLoading,
-		isError,
 	} = useQuery({
 		queryKey: ["income-charts-data"],
 		queryFn: async () => await getIncome(),
 	});
-
-	console.log("incomeData", incomeData);
 
 	const mergedData =
 		incomeData?.data?.reduce<Record<string, { source: string; amount: number }>>((acc, curr) => {
@@ -126,13 +121,31 @@ export function IncomeChart() {
 					</div>
 				)}
 			</CardContent>
-			<CardFooter className="flex-col gap-2 text-sm">
-				<div className="flex items-center gap-2 leading-none font-medium">
-					Trending up by 5.2% this month <TrendingUp className="h-4 w-4" />
-				</div>
-				<div className="text-muted-foreground leading-none">
-					Showing total visitors for the last 6 months
-				</div>
+			<CardFooter className="flex-wrap gap-3 text-sm">
+				{chartData && chartData.length > 0 ? (
+					chartData.map((item, index) => {
+						const totalAmount = chartData.reduce((sum, d) => sum + d.amount, 0);
+						const percentage = ((item.amount / totalAmount) * 100).toFixed(1);
+						return (
+							<div key={index} className="flex items-center gap-2">
+								<div
+									className="size-3 rounded-full"
+									style={{ backgroundColor: item.fill }}
+								/>
+								<span className="text-muted-foreground capitalize">
+									{item.source}
+								</span>
+								<span className="font-medium">
+									({percentage}%)
+								</span>
+							</div>
+						);
+					})
+				) : (
+					<div className="text-muted-foreground text-sm">
+						No income sources to display
+					</div>
+				)}
 			</CardFooter>
 		</Card>
 	);

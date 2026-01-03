@@ -16,6 +16,8 @@ export type SavingsItem = {
     type: string;
     bankName: string;
     accountNumber?: string;
+    amountToSave: number;
+    frequency: string;
     currentAmount: number;
     goalAmount: number;
     notes?: string;
@@ -28,6 +30,8 @@ export const savingsSchema = z.object({
     type: z.enum(["emergency", "vacation", "house", "car", "retirement", "wedding", "education", "other"]),
     bankName: z.string().optional(),
     accountNumber: z.string().optional(),
+    amountToSave: z.number().positive("Amount to save must be greater than 0"),
+    frequency: z.enum(["weekly", "monthly", "daily", "bi-weekly"]),
     currentAmount: z.number().positive("Current amount must be greater than 0"),
     goalAmount: z.number().positive("Goal amount must be greater than 0"),
     notes: z.string().optional(),

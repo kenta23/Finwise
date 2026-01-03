@@ -21,6 +21,7 @@ export type expenseType = {
 
 export type expenseItem = {
     id: string;
+    expenseCategoryId?: string;
     createdAt: Date;
     updatedAt: Date;
     userId: string;
@@ -28,7 +29,6 @@ export type expenseItem = {
     description: string;
     notes: string;
     fundIncome?: string | null;
-    category: string;
 };
 
 export type incomeType = {
@@ -37,6 +37,7 @@ export type incomeType = {
 }[];
 
 export type incomeItem = {
+    expenses?: expenseItem[];
     incomeSource?: {
         id: string;
         name: string;

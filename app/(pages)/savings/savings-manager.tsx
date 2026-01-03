@@ -49,7 +49,6 @@ import {
 } from "./data";
 
 export function SavingsManager() {
-    const [savingsItems, setSavingsItems] = useState<SavingsItem[]>([]);
     const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<SavingsItem | null>(null);
@@ -76,11 +75,12 @@ export function SavingsManager() {
                     description: data.message,
                 });
             } else {
-                toast.success(data.message, {
+                toast.success("Successful!", {
                     description: data.message,
                 });
                 queryClient.invalidateQueries({ queryKey: ["savings"] });
                 queryClient.invalidateQueries({ queryKey: ["summary"] });
+                queryClient.invalidateQueries({ queryKey: ["summary-redis"] });
             }
         },
         onError: (error) => {
@@ -104,6 +104,7 @@ export function SavingsManager() {
                 });
                 queryClient.invalidateQueries({ queryKey: ["savings"] });
                 queryClient.invalidateQueries({ queryKey: ["summary"] });
+                queryClient.invalidateQueries({ queryKey: ["summary-redis"] });
             }
         },
         onError: (error) => {
@@ -133,8 +134,8 @@ export function SavingsManager() {
             toast.error(error.message, {
                 description: "Failed to edit savings",
             });
-        }
-    })
+        },
+    });
 
     type OptimisticAction =
         | { type: "add"; item: SavingsItem }
@@ -162,6 +163,8 @@ export function SavingsManager() {
         type: "",
         bankName: "",
         accountNumber: "",
+        amountToSave: 0,
+        frequency: "",
         currentAmount: 0,
         goalAmount: 0,
         notes: "",
@@ -171,6 +174,8 @@ export function SavingsManager() {
         type: "",
         bankName: "",
         accountNumber: "",
+        amountToSave: 0,
+        frequency: "",
         currentAmount: 0,
         goalAmount: 0,
         notes: "",
@@ -183,6 +188,8 @@ export function SavingsManager() {
             type: "",
             bankName: "",
             accountNumber: "",
+            amountToSave: 0,
+            frequency: "",
             currentAmount: 0,
             goalAmount: 0,
             notes: "",
@@ -192,6 +199,8 @@ export function SavingsManager() {
             type: "",
             bankName: "",
             accountNumber: "",
+            amountToSave: 0,
+            frequency: "",
             currentAmount: 0,
             goalAmount: 0,
             notes: "",
@@ -203,7 +212,7 @@ export function SavingsManager() {
      * Filters out empty values from an object
      * Removes: empty strings (""), 0, null, undefined
      * Keeps: non-empty strings, non-zero numbers, boolean values
-     * 
+     *
      * @param data - The object to filter
      * @returns A new object with only non-empty values
      */
@@ -252,7 +261,8 @@ export function SavingsManager() {
 
             startTransition(() => {
                 optimisticUpdate({
-                    type: "add", item: {
+                    type: "add",
+                    item: {
                         ...parsedSavingsItem.data,
                         id: crypto.randomUUID(),
                         bankName: parsedSavingsItem.data.bankName || "",
@@ -260,7 +270,7 @@ export function SavingsManager() {
                         notes: parsedSavingsItem.data.notes || "",
                         createdAt: new Date(),
                         updatedAt: new Date(),
-                    } as SavingsItem
+                    } as SavingsItem,
                 });
 
                 addSavingsMutation({
@@ -268,8 +278,6 @@ export function SavingsManager() {
                     bankName: parsedSavingsItem.data.bankName || "",
                 });
             });
-
-
         } catch (error) {
             console.error("Error adding savings", error);
         }
@@ -284,6 +292,8 @@ export function SavingsManager() {
                 name: editFormData.name || undefined,
                 type: editFormData.type || undefined,
                 bankName: editFormData.bankName || undefined,
+                amountToSave: editFormData.amountToSave ? Number(editFormData.amountToSave) : undefined,
+                frequency: editFormData.frequency as "weekly" | "monthly" | "daily" | "bi-weekly" || undefined,
                 accountNumber: editFormData.accountNumber || undefined,
                 currentAmount: editFormData.currentAmount ? Number(editFormData.currentAmount) : undefined,
                 goalAmount: editFormData.goalAmount ? Number(editFormData.goalAmount) : undefined,
@@ -349,6 +359,8 @@ export function SavingsManager() {
             type: item.type,
             bankName: item.bankName,
             accountNumber: item.accountNumber || "",
+            amountToSave: item.amountToSave,
+            frequency: item.frequency,
             currentAmount: item.currentAmount,
             goalAmount: item.goalAmount,
             notes: item.notes || "",
@@ -359,7 +371,11 @@ export function SavingsManager() {
 
     const openViewDialog = (item: SavingsItem) => {
         console.log("item", item);
-        setViewingItem(item);
+        setViewingItem({
+            ...item,
+            amountToSave: item.amountToSave || 0,
+            frequency: item.frequency || "",
+        });
         setIsViewDialogOpen(true);
     };
 
@@ -395,6 +411,91 @@ export function SavingsManager() {
         if (goal === 0) return 0;
         return Math.min(100, (current / goal) * 100);
     };
+
+
+
+
+    const estimatedTimeToReachGoal = (
+        currentAmount: number,
+        goalAmount: number,
+        amountToSave: number,
+        frequency: string
+    ): string => {
+        if (amountToSave <= 0) {
+            return "N/A";
+        }
+
+        const remaining = goalAmount - currentAmount;
+        if (remaining <= 0) {
+            return "Goal reached!";
+        }
+
+        // Calculate how many periods needed
+        const periodsNeeded = Math.ceil(remaining / amountToSave);
+
+        // Convert periods to time based on frequency
+        switch (frequency.toLowerCase()) {
+            case "daily":
+                if (periodsNeeded < 7) {
+                    return `${periodsNeeded} day${periodsNeeded > 1 ? "s" : ""}`;
+                } else if (periodsNeeded < 30) {
+                    const weeks = Math.floor(periodsNeeded / 7);
+                    const days = periodsNeeded % 7;
+                    if (days === 0) {
+                        return `${weeks} week${weeks > 1 ? "s" : ""}`;
+                    }
+                    return `${weeks} week${weeks > 1 ? "s" : ""} ${days} day${days > 1 ? "s" : ""}`;
+                } else {
+                    const months = Math.floor(periodsNeeded / 30);
+                    const days = periodsNeeded % 30;
+                    if (days === 0) {
+                        return `${months} month${months > 1 ? "s" : ""}`;
+                    }
+                    return `${months} month${months > 1 ? "s" : ""} ${days} day${days > 1 ? "s" : ""}`;
+                }
+            case "weekly":
+                if (periodsNeeded < 4) {
+                    return `${periodsNeeded} week${periodsNeeded > 1 ? "s" : ""}`;
+                } else {
+                    const months = Math.floor(periodsNeeded / 4);
+                    const weeks = periodsNeeded % 4;
+                    if (weeks === 0) {
+                        return `${months} month${months > 1 ? "s" : ""}`;
+                    }
+                    return `${months} month${months > 1 ? "s" : ""} ${weeks} week${weeks > 1 ? "s" : ""}`;
+                }
+            case "bi-weekly":
+                if (periodsNeeded < 2) {
+                    return `${periodsNeeded} week${periodsNeeded > 1 ? "s" : ""}`;
+                } else {
+                    const months = Math.floor(periodsNeeded / 2);
+                    const weeks = periodsNeeded % 2;
+                    return `${months} month${months > 1 ? "s" : ""} ${weeks} week${weeks > 1 ? "s" : ""}`;
+                }
+            case "monthly":
+                if (periodsNeeded < 12) {
+                    return `${periodsNeeded} month${periodsNeeded > 1 ? "s" : ""}`;
+                } else {
+                    const years = Math.floor(periodsNeeded / 12);
+                    const months = periodsNeeded % 12;
+                    if (months === 0) {
+                        return `${years} year${years > 1 ? "s" : ""}`;
+                    }
+                    return `${years} year${years > 1 ? "s" : ""} ${months} month${months > 1 ? "s" : ""}`;
+                }
+            default:
+                return `${periodsNeeded} period${periodsNeeded > 1 ? "s" : ""}`;
+        }
+    };
+
+
+
+    const frequencyOptions: { label: string; value: string }[] = [
+        { label: "Daily", value: "daily" },
+        { label: "Bi-Weekly", value: "bi-weekly" },
+        { label: "Weekly", value: "weekly" },
+        { label: "Monthly", value: "monthly" },
+    ];
 
     return (
         <div className="w-full h-auto py-3">
@@ -548,6 +649,59 @@ export function SavingsManager() {
 
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="grid gap-2">
+                                        <Label htmlFor="amountToSave">Amount to Save</Label>
+                                        <div className="relative">
+                                            <span className="text-muted-foreground text-sm absolute left-2 top-1/2 -translate-y-1/2">
+                                                ₱
+                                            </span>
+                                            <Input
+                                                id="amountToSave"
+                                                type="number"
+                                                min="0"
+                                                step="1"
+                                                placeholder="0"
+                                                className="pl-6"
+                                                value={formData.amountToSave || ""}
+                                                onChange={(e) => {
+                                                    const value = e.target.value.replace(/^0+/, "");
+                                                    const numValue = value === "" ? 0 : Number(value);
+                                                    setFormData((prev) => ({
+                                                        ...prev,
+                                                        amountToSave: Number.isNaN(numValue) ? 0 : numValue,
+                                                    }));
+                                                }}
+                                            />
+                                            {getErrorMessage("amountToSave") && (
+                                                <p className="text-sm text-red-500">{getErrorMessage("amountToSave")}</p>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="frequency">Frequency</Label>
+                                        <Select
+                                            value={formData.frequency}
+                                            onValueChange={(value) => setFormData({ ...formData, frequency: value })}
+                                        >
+                                            <SelectTrigger className="cursor-pointer w-full">
+                                                <SelectValue placeholder="Select frequency" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {frequencyOptions.map(fr => (
+                                                    <SelectItem key={fr.value} className="cursor-pointer" value={fr.value}>
+                                                        {fr.label}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        {getErrorMessage("frequency") && (
+                                            <p className="text-sm text-red-500">{getErrorMessage("frequency")}</p>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid gap-2">
                                         <Label htmlFor="currentAmount">Current Amount</Label>
                                         <div className="relative">
                                             <span className="text-muted-foreground text-sm absolute left-2 top-1/2 -translate-y-1/2">
@@ -563,11 +717,14 @@ export function SavingsManager() {
                                                 value={formData.currentAmount || ""}
                                                 onChange={(e) => {
                                                     // Remove leading zeros from the input
-                                                    const value = e.target.value.replace(/^0+/, '');
+                                                    const value = e.target.value.replace(/^0+/, "");
                                                     // If value is empty after removing leading zeros, set to 0
                                                     // Otherwise, convert to number
-                                                    const numValue = value === '' ? 0 : Number(value);
-                                                    setFormData({ ...formData, currentAmount: Number.isNaN(numValue) ? 0 : numValue });
+                                                    const numValue = value === "" ? 0 : Number(value);
+                                                    setFormData({
+                                                        ...formData,
+                                                        currentAmount: Number.isNaN(numValue) ? 0 : numValue,
+                                                    });
                                                 }}
                                             />
                                         </div>
@@ -592,11 +749,14 @@ export function SavingsManager() {
                                                 value={formData.goalAmount || ""}
                                                 onChange={(e) => {
                                                     // Remove leading zeros from the input
-                                                    const value = e.target.value.replace(/^0+/, '');
+                                                    const value = e.target.value.replace(/^0+/, "");
                                                     // If value is empty after removing leading zeros, set to 1
                                                     // Otherwise, convert to number
-                                                    const numValue = value === '' ? 0 : Number(value);
-                                                    setFormData({ ...formData, goalAmount: Number.isNaN(numValue) ? 0 : numValue });
+                                                    const numValue = value === "" ? 0 : Number(value);
+                                                    setFormData({
+                                                        ...formData,
+                                                        goalAmount: Number.isNaN(numValue) ? 0 : numValue,
+                                                    });
                                                 }}
                                             />
                                         </div>
@@ -628,8 +788,16 @@ export function SavingsManager() {
                                 >
                                     Cancel
                                 </Button>
-                                <Button className="cursor-pointer" onClick={handleAddSavings} disabled={isAddPending}>
-                                    {isAddPending ? <IconLoader2 className="animate-spin" size={16} /> : "Add Savings"}
+                                <Button
+                                    className="cursor-pointer"
+                                    onClick={handleAddSavings}
+                                    disabled={isAddPending}
+                                >
+                                    {isAddPending ? (
+                                        <IconLoader2 className="animate-spin" size={16} />
+                                    ) : (
+                                        "Add Savings"
+                                    )}
                                 </Button>
                             </DialogFooter>
                         </DialogContent>
@@ -756,8 +924,8 @@ export function SavingsManager() {
                                 placeholder="e.g., Emergency Fund, Vacation Savings"
                                 value={formData.name || editFormData.name}
                                 onChange={(e) => {
-                                    setFormData({ ...formData, name: e.target.value })
-                                    setEditFormData({ ...editFormData, name: e.target.value })
+                                    setFormData({ ...formData, name: e.target.value });
+                                    setEditFormData({ ...editFormData, name: e.target.value });
                                 }}
                             />
                             {getErrorMessage("name") && (
@@ -771,8 +939,8 @@ export function SavingsManager() {
                                 <Select
                                     value={formData.type || editFormData.type}
                                     onValueChange={(value) => {
-                                        setFormData({ ...formData, type: value })
-                                        setEditFormData({ ...editFormData, type: value })
+                                        setFormData({ ...formData, type: value });
+                                        setEditFormData({ ...editFormData, type: value });
                                     }}
                                 >
                                     <SelectTrigger className="cursor-pointer w-full">
@@ -817,8 +985,8 @@ export function SavingsManager() {
                                     placeholder="e.g., BPI, BDO, Metrobank"
                                     value={formData.bankName || editFormData.bankName}
                                     onChange={(e) => {
-                                        setFormData({ ...formData, bankName: e.target.value })
-                                        setEditFormData({ ...editFormData, bankName: e.target.value })
+                                        setFormData({ ...formData, bankName: e.target.value });
+                                        setEditFormData({ ...editFormData, bankName: e.target.value });
                                     }}
                                 />
                                 {getErrorMessage("bankName") && (
@@ -834,12 +1002,64 @@ export function SavingsManager() {
                                 placeholder="Enter account number"
                                 value={formData.accountNumber || editFormData.accountNumber}
                                 onChange={(e) => {
-                                    setFormData({ ...formData, accountNumber: e.target.value })
-                                    setEditFormData({ ...editFormData, accountNumber: e.target.value })
+                                    setFormData({ ...formData, accountNumber: e.target.value });
+                                    setEditFormData({ ...editFormData, accountNumber: e.target.value });
                                 }}
                             />
                         </div>
 
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="grid gap-2">
+                                <Label htmlFor="edit-amountToSave">Amount to Save</Label>
+                                <div className="relative">
+                                    <span className="text-muted-foreground text-sm absolute left-2 top-1/2 -translate-y-1/2">
+                                        ₱
+                                    </span>
+
+                                    <Input
+                                        id="edit-amountToSave"
+                                        type="number"
+                                        min="0"
+                                        step="1"
+                                        placeholder="0.00"
+                                        className="pl-6"
+                                        value={formData.amountToSave || editFormData.amountToSave}
+                                        onChange={(e) => {
+                                            setFormData({ ...formData, amountToSave: Number(e.target.value) });
+                                            setEditFormData({ ...editFormData, amountToSave: Number(e.target.value) });
+                                        }}
+                                    />
+                                    {getErrorMessage("amountToSave") && (
+                                        <p className="text-sm text-red-500">{getErrorMessage("amountToSave")}</p>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="grid gap-2">
+                                <Label htmlFor="edit-frequency">Frequency</Label>
+                                <Select
+                                    value={formData.frequency || editFormData.frequency}
+                                    onValueChange={(value) => {
+                                        setFormData({ ...formData, frequency: value });
+                                        setEditFormData({ ...editFormData, frequency: value });
+                                    }}
+                                >
+                                    <SelectTrigger className="cursor-pointer w-full">
+                                        <SelectValue placeholder="Select frequency" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {frequencyOptions.map(fr => (
+                                            <SelectItem key={fr.value} className="cursor-pointer" value={fr.value}>
+                                                {fr.label}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                {getErrorMessage("frequency") && (
+                                    <p className="text-sm text-red-500">{getErrorMessage("frequency")}</p>
+                                )}
+                            </div>
+                        </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="grid gap-2">
                                 <Label htmlFor="edit-currentAmount">Current Amount</Label>
@@ -856,8 +1076,8 @@ export function SavingsManager() {
                                         className="pl-6"
                                         value={formData.currentAmount || editFormData.currentAmount}
                                         onChange={(e) => {
-                                            setFormData({ ...formData, currentAmount: Number(e.target.value) })
-                                            setEditFormData({ ...editFormData, currentAmount: Number(e.target.value) })
+                                            setFormData({ ...formData, currentAmount: Number(e.target.value) });
+                                            setEditFormData({ ...editFormData, currentAmount: Number(e.target.value) });
                                         }}
                                     />
                                 </div>
@@ -881,8 +1101,8 @@ export function SavingsManager() {
                                         className="pl-6"
                                         value={formData.goalAmount || editFormData.goalAmount}
                                         onChange={(e) => {
-                                            setFormData({ ...formData, goalAmount: Number(e.target.value) })
-                                            setEditFormData({ ...editFormData, goalAmount: Number(e.target.value) })
+                                            setFormData({ ...formData, goalAmount: Number(e.target.value) });
+                                            setEditFormData({ ...editFormData, goalAmount: Number(e.target.value) });
                                         }}
                                     />
                                 </div>
@@ -899,8 +1119,8 @@ export function SavingsManager() {
                                 placeholder="Add any additional notes about this savings account..."
                                 value={formData.notes || editFormData.notes}
                                 onChange={(e) => {
-                                    setFormData({ ...formData, notes: e.target.value })
-                                    setEditFormData({ ...editFormData, notes: e.target.value })
+                                    setFormData({ ...formData, notes: e.target.value });
+                                    setEditFormData({ ...editFormData, notes: e.target.value });
                                 }}
                                 rows={3}
                             />
@@ -920,7 +1140,11 @@ export function SavingsManager() {
                             Cancel
                         </Button>
                         <Button className="cursor-pointer" onClick={handleEditSavings} disabled={isEditPending}>
-                            {isEditPending ? <IconLoader2 className="animate-spin" size={16} /> : "Update Savings"}
+                            {isEditPending ? (
+                                <IconLoader2 className="animate-spin" size={16} />
+                            ) : (
+                                "Update Savings"
+                            )}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -974,6 +1198,15 @@ export function SavingsManager() {
                                             <p className="text-lg font-semibold">{viewingItem.accountNumber}</p>
                                         </div>
                                     )}
+                                    <div className="space-y-1">
+                                        <p className="text-sm text-muted-foreground">Amount to Save</p>
+                                        <p className="text-lg font-semibold">₱{viewingItem.amountToSave.toLocaleString() || 0}</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <p className="text-sm text-muted-foreground">Frequency</p>
+                                        <p className="text-lg font-semibold">{viewingItem.frequency.charAt(0).toUpperCase() + viewingItem.frequency.slice(1)}</p>
+                                    </div>
+
                                     <div className="space-y-1">
                                         <p className="text-sm text-muted-foreground">Current Amount</p>
                                         <p className="text-2xl font-bold text-green-600">
@@ -1059,6 +1292,27 @@ export function SavingsManager() {
                                                 ₱{viewingItem.goalAmount.toLocaleString()}
                                             </span>
                                         </div>
+
+                                        <div className="flex justify-between w-full">
+                                            <span className="text-sm">Amount to Save</span>
+                                            <span className="font-semibold">
+                                                ₱{viewingItem.amountToSave.toLocaleString()}
+                                            </span>
+                                        </div>
+
+
+                                        <div className="flex justify-between w-full">
+                                            <span className="text-sm">Estimated Time to Reach Goal</span>
+                                            <span className="font-semibold text-nowrap text-sm text-right">
+                                                {estimatedTimeToReachGoal(
+                                                    viewingItem.currentAmount,
+                                                    viewingItem.goalAmount,
+                                                    viewingItem.amountToSave,
+                                                    viewingItem.frequency
+                                                )}
+                                            </span>
+                                        </div>
+
                                         <div className="flex justify-between w-full">
                                             <span className="text-sm">Remaining</span>
                                             <span className="font-semibold text-red-600">
@@ -1076,6 +1330,7 @@ export function SavingsManager() {
                                             </span>
                                         </div>
                                     </div>
+
                                 </div>
 
                                 <div className="pt-4 border-t col-span-6 w-full">

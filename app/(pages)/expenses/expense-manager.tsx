@@ -70,7 +70,6 @@ export function ExpenseManager() {
 
     const incomedata = useIncomeStore((state) => state.income);
 
-    console.log("expensesData", expensesData);
 
     // Get categories from data.ts instead of localStorage
     const userCategories = categories.map((cat) => ({
@@ -108,9 +107,11 @@ export function ExpenseManager() {
         }
     );
 
+
+
     const { mutate: addExpenseMutation, isPending: isAddPending } = useMutation({
         mutationKey: ["addExpense"],
-        mutationFn: async (expense: Omit<expenseItem, "id" | "createdAt" | "updatedAt" | "userId">) =>
+        mutationFn: async (expense: Omit<expenseItem, "id" | "createdAt" | "updatedAt" | "userId" | "expenseCategoryId">) =>
             await addExpense(expense),
         onSuccess: (data) => {
             toast.success(data.message, {
@@ -416,6 +417,8 @@ export function ExpenseManager() {
         const Icon = getCategoryIcon(categoryname).icon;
         return <Icon size={32} color={getCategoryIcon(categoryname).color} />;
     };
+
+
 
     return (
         <div className="w-full h-auto py-3">
@@ -946,6 +949,13 @@ export function ExpenseManager() {
                                     <p className="text-sm bg-muted p-3 rounded-lg">{viewingExpense.notes}</p>
                                 </div>
                             )}
+
+                            <div className="flex justify-between">
+                                <span className="text-sm">Fund used</span>
+                                <span className="font-semibold">
+                                    {viewingExpense.income?.income_name || "N/A"}
+                                </span>
+                            </div>
 
                             <div className="pt-4 border-t">
                                 <p className="text-sm text-muted-foreground mb-2">Category Spending</p>

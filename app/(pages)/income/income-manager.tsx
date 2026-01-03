@@ -6,14 +6,11 @@ import {
     IconEdit,
     IconEye,
     IconLoader2,
-    IconPigMoney,
     IconPlus,
-    IconReceipt,
     IconTrash,
     IconTrendingUp,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import Form from "next/form";
 import { startTransition, useEffect, useOptimistic, useState } from "react";
 import { toast } from "sonner";
 import z from "zod";
@@ -21,7 +18,7 @@ import { deleteIncome, editIncome, getIncome } from "@/app/actions/income";
 import { submitNewIncome } from "@/app/actions/query";
 import { frequencyLabels, incomeColors, incomeIcons, incomeSources } from "@/data";
 import { useSession } from "@/lib/auth-client";
-import { Frequency, type incomeItem, type incomeItems } from "@/types";
+import { expenseItem, Frequency, type incomeItem, type incomeItems } from "@/types";
 import { Button } from "../../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/card";
 import {
@@ -80,10 +77,17 @@ export function IncomeManager() {
     const { mutate: deleteIncomeMutation, isPending: isDeletePending } = useMutation({
         mutationFn: async (id: string) => await deleteIncome(id),
         onSuccess: (data) => {
-            toast.success(data.message, {
-                description: "Income has been removed from your income list.",
-            });
+            if (data.error) {
+                toast.error(data.error, {
+                    description: data.message,
+                });
+            } else {
+                toast.success("Successful!", {
+                    description: "Income has been removed from your income list.",
+                });
+            }
             queryClient.invalidateQueries({ queryKey: ["income"] });
+            queryClient.invalidateQueries({ queryKey: ["income-charts-data"] });
             queryClient.invalidateQueries({ queryKey: ["summary"] });
             queryClient.invalidateQueries({ queryKey: ["summary-redis"] });
             setDeletingItemId(null);
@@ -106,12 +110,8 @@ export function IncomeManager() {
         | { type: "add"; item: incomeItem }
         | { type: "edit"; item: incomeItem };
 
-    const [optimisticIncomeData, optimisticUpdate] = useOptimistic(
-        incomeData?.data?.map((item) => ({
-            ...item,
-            frequency: item.frequency as Frequency,
-        })) || [],
-        (state: incomeItem[], action: OptimisticAction): incomeItems => {
+    const [optimisticIncomeData, optimisticUpdate] = useOptimistic(incomeData?.data as unknown as incomeItem[],
+        (state: incomeItem[], action: OptimisticAction): incomeItem[] => {
             if (action.type === "delete") {
                 return state.filter((item) => item.id !== action.id);
             }
@@ -133,10 +133,18 @@ export function IncomeManager() {
     const { mutate: editIncomeMutation, isPending: isEditPending } = useMutation({
         mutationKey: ["editIncome"],
         onSuccess: (data) => {
-            toast.success(data.message, {
-                description: "Income has been updated successfully",
-            });
-            queryClient.invalidateQueries({ queryKey: ["income"] });
+            if (data.error) {
+                toast.error(data.error, {
+                    description: data.message,
+                });
+            } else {
+                toast.success("Successful!", {
+                    description: "Income has been updated successfully",
+                });
+                queryClient.invalidateQueries({ queryKey: ["income"] });
+                queryClient.invalidateQueries({ queryKey: ["summary"] });
+                queryClient.invalidateQueries({ queryKey: ["summary-redis"] });
+            }
         },
         onError: (error) => {
             toast.error(error.message, {
@@ -295,13 +303,17 @@ export function IncomeManager() {
                 return acc;
             },
             {} as Record<string, number>
-        );
+        ) || {};
+
+        const perWeek = totals["per-week"] || 0;
+        const perMonth = totals["per-month"] || 0;
+        const perYear = totals["per-year"] || 0;
 
         return {
-            perWeek: totals["per-week"] || 0,
-            perMonth: totals["per-month"] || 0,
-            perYear: totals["per-year"] || 0,
-            total: totals.perWeek + totals.perMonth + totals.perYear,
+            perWeek,
+            perMonth,
+            perYear,
+            total: perWeek + perMonth + perYear,
         };
     };
 
@@ -313,13 +325,7 @@ export function IncomeManager() {
         return error?.message;
     };
 
-    const handleSubmitNewIncome = async (e: React.MouseEvent<HTMLButtonElement>) => {
-        e.preventDefault();
 
-        console.log("formData", formData);
-
-        submitNewIncomeMutation(formData);
-    };
 
     return (
         <div className="w-full h-auto py-3">

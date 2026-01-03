@@ -71,6 +71,8 @@ export async function addSavings(
                 name: parsedData.data.name,
                 type: parsedData.data.type,
                 bankName: parsedData.data.bankName || "",
+                amountToSave: Number(parsedData.data.amountToSave),
+                frequency: parsedData.data.frequency as "weekly" | "monthly" | "daily" | "bi-weekly",
                 accountNumber: parsedData.data.accountNumber,
                 currentAmount: Number(parsedData.data.currentAmount),
                 goalAmount: Number(parsedData.data.goalAmount),
