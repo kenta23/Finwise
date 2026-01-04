@@ -32,6 +32,7 @@ export async function getIncome() {
 			include: {
 				incomeSource: true,
 				expenses: true,
+				savings: true,
 			},
 		});
 

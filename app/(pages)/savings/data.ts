@@ -16,6 +16,7 @@ export type SavingsItem = {
     type: string;
     bankName: string;
     accountNumber?: string;
+    incomeId: string;
     amountToSave: number;
     frequency: string;
     currentAmount: number;
@@ -35,6 +36,7 @@ export const savingsSchema = z.object({
     currentAmount: z.number().positive("Current amount must be greater than 0"),
     goalAmount: z.number().positive("Goal amount must be greater than 0"),
     notes: z.string().optional(),
+    incomeId: z.string().min(1, "Income is required"),
 });
 
 // Schema for editing - all fields are optional

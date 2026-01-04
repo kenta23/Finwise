@@ -1,5 +1,6 @@
 import type { categories } from "@/data";
 
+
 export enum Frequency {
     PER_WEEK = "per-week",
     PER_MONTH = "per-month",
@@ -36,8 +37,25 @@ export type incomeType = {
     name: string;
 }[];
 
+export type SavingsItem = {
+    id: string;
+    name: string;
+    type: string;
+    bankName: string;
+    accountNumber?: string;
+    incomeId: string;
+    amountToSave: number;
+    frequency: string;
+    currentAmount: number;
+    goalAmount: number;
+    notes?: string;
+    updatedAt: Date;
+    createdAt: Date;
+};
+
 export type incomeItem = {
     expenses?: expenseItem[];
+    savings?: SavingsItem[];
     incomeSource?: {
         id: string;
         name: string;
@@ -96,3 +114,5 @@ export type expenseWithRelations = {
     income: expenseIncomeRelation;
     expenseCategory: expenseCategoryRelation;
 };
+
+

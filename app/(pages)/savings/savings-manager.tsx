@@ -17,6 +17,9 @@ import { startTransition, useEffect, useOptimistic, useState } from "react";
 import { toast } from "sonner";
 import type z from "zod";
 import { addSavings, deleteSavings, editSavings, getSavings } from "@/app/actions/savings";
+import { frequencyOptions } from "@/data";
+import { useIncomeStore } from "@/lib/store";
+import type { SavingsItem } from "@/types";
 import { Button } from "../../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/card";
 import {
@@ -39,14 +42,26 @@ import {
     SelectValue,
 } from "../../../components/ui/select";
 import { Textarea } from "../../../components/ui/textarea";
-import {
-    editSavingsSchema,
-    type SavingsItem,
-    savingsColors,
-    savingsIcons,
-    savingsSchema,
-    savingsTypeLabels,
-} from "./data";
+import AddSavings from "./add-savings";
+import { editSavingsSchema, savingsColors, savingsIcons, savingsTypeLabels } from "./data";
+
+export type OptimisticAction =
+    | { type: "add"; item: SavingsItem }
+    | { type: "edit"; item: SavingsItem }
+    | { type: "delete"; id: string };
+
+export type savingsType = {
+    name: string;
+    type: string;
+    bankName: string;
+    accountNumber: string;
+    amountToSave: number;
+    frequency: string;
+    currentAmount: number;
+    goalAmount: number;
+    notes: string;
+    incomeId: string;
+};
 
 export function SavingsManager() {
     const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -63,32 +78,6 @@ export function SavingsManager() {
         queryFn: async () => await getSavings(),
     });
     const queryClient = useQueryClient();
-
-    const { mutate: addSavingsMutation, isPending: isAddPending } = useMutation({
-        mutationKey: ["addSavings"],
-        mutationFn: async (
-            savingsItem: Omit<SavingsItem, "id" | "createdAt" | "updatedAt" | "userId">
-        ) => await addSavings(savingsItem),
-        onSuccess: (data) => {
-            if (data.error) {
-                toast.error(data.error, {
-                    description: data.message,
-                });
-            } else {
-                toast.success("Successful!", {
-                    description: data.message,
-                });
-                queryClient.invalidateQueries({ queryKey: ["savings"] });
-                queryClient.invalidateQueries({ queryKey: ["summary"] });
-                queryClient.invalidateQueries({ queryKey: ["summary-redis"] });
-            }
-        },
-        onError: (error) => {
-            toast.error(error.message, {
-                description: error.message,
-            });
-        },
-    });
 
     const { mutate: editSavingsMutation, isPending: isEditPending } = useMutation({
         mutationKey: ["editSavings"],
@@ -137,11 +126,6 @@ export function SavingsManager() {
         },
     });
 
-    type OptimisticAction =
-        | { type: "add"; item: SavingsItem }
-        | { type: "edit"; item: SavingsItem }
-        | { type: "delete"; id: string };
-
     const [optimisticSavingsData, optimisticUpdate] = useOptimistic(
         savingsData?.data || [],
         (state: SavingsItem[], action: OptimisticAction): SavingsItem[] => {
@@ -158,7 +142,9 @@ export function SavingsManager() {
         }
     );
 
-    const [formData, setFormData] = useState({
+    const [formData, setFormData] = useState<
+        Omit<SavingsItem, "id" | "updatedAt" | "createdAt" | "userId">
+    >({
         name: "",
         type: "",
         bankName: "",
@@ -168,8 +154,11 @@ export function SavingsManager() {
         currentAmount: 0,
         goalAmount: 0,
         notes: "",
+        incomeId: "",
     });
-    const [editFormData, setEditFormData] = useState({
+    const [editFormData, setEditFormData] = useState<
+        Omit<SavingsItem, "id" | "updatedAt" | "createdAt" | "userId">
+    >({
         name: "",
         type: "",
         bankName: "",
@@ -179,7 +168,10 @@ export function SavingsManager() {
         currentAmount: 0,
         goalAmount: 0,
         notes: "",
+        incomeId: "",
     });
+    const incomedata = useIncomeStore((state) => state.income);
+
     const [errors, setErrors] = useState<z.ZodError | null>(null);
 
     const resetForm = () => {
@@ -193,6 +185,7 @@ export function SavingsManager() {
             currentAmount: 0,
             goalAmount: 0,
             notes: "",
+            incomeId: "",
         });
         setEditFormData({
             name: "",
@@ -204,6 +197,7 @@ export function SavingsManager() {
             currentAmount: 0,
             goalAmount: 0,
             notes: "",
+            incomeId: "",
         });
         setErrors(null);
     };
@@ -242,47 +236,6 @@ export function SavingsManager() {
         return filtered;
     };
 
-    const handleAddSavings = async () => {
-        console.log("formData", formData);
-        try {
-            const parsedSavingsItem = savingsSchema.safeParse({
-                ...formData,
-                currentAmount: Number(formData.currentAmount),
-                goalAmount: Number(formData.goalAmount),
-            });
-
-            if (!parsedSavingsItem.success) {
-                setErrors(parsedSavingsItem.error as z.ZodError);
-                return;
-            }
-
-            setIsAddDialogOpen(false);
-            resetForm();
-
-            startTransition(() => {
-                optimisticUpdate({
-                    type: "add",
-                    item: {
-                        ...parsedSavingsItem.data,
-                        id: crypto.randomUUID(),
-                        bankName: parsedSavingsItem.data.bankName || "",
-                        accountNumber: parsedSavingsItem.data.accountNumber || "",
-                        notes: parsedSavingsItem.data.notes || "",
-                        createdAt: new Date(),
-                        updatedAt: new Date(),
-                    } as SavingsItem,
-                });
-
-                addSavingsMutation({
-                    ...parsedSavingsItem.data,
-                    bankName: parsedSavingsItem.data.bankName || "",
-                });
-            });
-        } catch (error) {
-            console.error("Error adding savings", error);
-        }
-    };
-
     const handleEditSavings = () => {
         if (!editingItem) return;
 
@@ -293,7 +246,8 @@ export function SavingsManager() {
                 type: editFormData.type || undefined,
                 bankName: editFormData.bankName || undefined,
                 amountToSave: editFormData.amountToSave ? Number(editFormData.amountToSave) : undefined,
-                frequency: editFormData.frequency as "weekly" | "monthly" | "daily" | "bi-weekly" || undefined,
+                frequency:
+                    (editFormData.frequency as "weekly" | "monthly" | "daily" | "bi-weekly") || undefined,
                 accountNumber: editFormData.accountNumber || undefined,
                 currentAmount: editFormData.currentAmount ? Number(editFormData.currentAmount) : undefined,
                 goalAmount: editFormData.goalAmount ? Number(editFormData.goalAmount) : undefined,
@@ -364,6 +318,7 @@ export function SavingsManager() {
             currentAmount: item.currentAmount,
             goalAmount: item.goalAmount,
             notes: item.notes || "",
+            incomeId: item.incomeId || "",
         });
         setIsEditDialogOpen(true);
         setErrors(null);
@@ -411,9 +366,6 @@ export function SavingsManager() {
         if (goal === 0) return 0;
         return Math.min(100, (current / goal) * 100);
     };
-
-
-
 
     const estimatedTimeToReachGoal = (
         currentAmount: number,
@@ -489,14 +441,6 @@ export function SavingsManager() {
     };
 
 
-
-    const frequencyOptions: { label: string; value: string }[] = [
-        { label: "Daily", value: "daily" },
-        { label: "Bi-Weekly", value: "bi-weekly" },
-        { label: "Weekly", value: "weekly" },
-        { label: "Monthly", value: "monthly" },
-    ];
-
     return (
         <div className="w-full h-auto py-3">
             <div className="flex flex-col gap-6">
@@ -549,260 +493,16 @@ export function SavingsManager() {
                 </div>
 
                 {/* Add Savings Button */}
-                <div>
-                    <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-                        <DialogTrigger asChild>
-                            <Button className="cursor-pointer" variant="default">
-                                <IconPlus />
-                                <span>Add Savings Account</span>
-                            </Button>
-                        </DialogTrigger>
-
-                        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                            <DialogHeader>
-                                <DialogTitle>Add New Savings Account</DialogTitle>
-                                <DialogDescription>
-                                    Add a new savings account or goal to track your savings progress. Fill in the
-                                    details below.
-                                </DialogDescription>
-                            </DialogHeader>
-
-                            <div className="grid gap-4 py-4">
-                                <div className="grid gap-2">
-                                    <Label htmlFor="savings-name">Savings Name</Label>
-                                    <Input
-                                        id="savings-name"
-                                        placeholder="e.g., Emergency Fund, Vacation Savings"
-                                        value={formData.name}
-                                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                    />
-                                    {getErrorMessage("name") && (
-                                        <p className="text-sm text-red-500">{getErrorMessage("name")}</p>
-                                    )}
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="type">Savings Type</Label>
-                                        <Select
-                                            value={formData.type}
-                                            onValueChange={(value) => setFormData({ ...formData, type: value })}
-                                        >
-                                            <SelectTrigger className="cursor-pointer w-full">
-                                                <SelectValue placeholder="Select savings type" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem className="cursor-pointer" value="emergency">
-                                                    Emergency Fund
-                                                </SelectItem>
-                                                <SelectItem className="cursor-pointer" value="vacation">
-                                                    Vacation
-                                                </SelectItem>
-                                                <SelectItem className="cursor-pointer" value="house">
-                                                    House Down Payment
-                                                </SelectItem>
-                                                <SelectItem className="cursor-pointer" value="car">
-                                                    Car Purchase
-                                                </SelectItem>
-                                                <SelectItem className="cursor-pointer" value="retirement">
-                                                    Retirement
-                                                </SelectItem>
-                                                <SelectItem className="cursor-pointer" value="wedding">
-                                                    Wedding
-                                                </SelectItem>
-                                                <SelectItem className="cursor-pointer" value="education">
-                                                    Education
-                                                </SelectItem>
-                                                <SelectItem className="cursor-pointer" value="other">
-                                                    Other
-                                                </SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                        {getErrorMessage("type") && (
-                                            <p className="text-sm text-red-500">{getErrorMessage("type")}</p>
-                                        )}
-                                    </div>
-
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="bankName">Bank Name</Label>
-                                        <Input
-                                            id="bankName"
-                                            placeholder="e.g., BPI, BDO, Metrobank"
-                                            value={formData.bankName}
-                                            onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
-                                        />
-                                        {getErrorMessage("bankName") && (
-                                            <p className="text-sm text-red-500">{getErrorMessage("bankName")}</p>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <Label htmlFor="accountNumber">Account Number (Optional)</Label>
-                                    <Input
-                                        id="accountNumber"
-                                        placeholder="Enter account number"
-                                        value={formData.accountNumber}
-                                        onChange={(e) => setFormData({ ...formData, accountNumber: e.target.value })}
-                                    />
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="amountToSave">Amount to Save</Label>
-                                        <div className="relative">
-                                            <span className="text-muted-foreground text-sm absolute left-2 top-1/2 -translate-y-1/2">
-                                                ₱
-                                            </span>
-                                            <Input
-                                                id="amountToSave"
-                                                type="number"
-                                                min="0"
-                                                step="1"
-                                                placeholder="0"
-                                                className="pl-6"
-                                                value={formData.amountToSave || ""}
-                                                onChange={(e) => {
-                                                    const value = e.target.value.replace(/^0+/, "");
-                                                    const numValue = value === "" ? 0 : Number(value);
-                                                    setFormData((prev) => ({
-                                                        ...prev,
-                                                        amountToSave: Number.isNaN(numValue) ? 0 : numValue,
-                                                    }));
-                                                }}
-                                            />
-                                            {getErrorMessage("amountToSave") && (
-                                                <p className="text-sm text-red-500">{getErrorMessage("amountToSave")}</p>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="frequency">Frequency</Label>
-                                        <Select
-                                            value={formData.frequency}
-                                            onValueChange={(value) => setFormData({ ...formData, frequency: value })}
-                                        >
-                                            <SelectTrigger className="cursor-pointer w-full">
-                                                <SelectValue placeholder="Select frequency" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {frequencyOptions.map(fr => (
-                                                    <SelectItem key={fr.value} className="cursor-pointer" value={fr.value}>
-                                                        {fr.label}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        {getErrorMessage("frequency") && (
-                                            <p className="text-sm text-red-500">{getErrorMessage("frequency")}</p>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="currentAmount">Current Amount</Label>
-                                        <div className="relative">
-                                            <span className="text-muted-foreground text-sm absolute left-2 top-1/2 -translate-y-1/2">
-                                                ₱
-                                            </span>
-                                            <Input
-                                                id="currentAmount"
-                                                type="number"
-                                                min="0"
-                                                step="1"
-                                                placeholder="0"
-                                                className="pl-6"
-                                                value={formData.currentAmount || ""}
-                                                onChange={(e) => {
-                                                    // Remove leading zeros from the input
-                                                    const value = e.target.value.replace(/^0+/, "");
-                                                    // If value is empty after removing leading zeros, set to 0
-                                                    // Otherwise, convert to number
-                                                    const numValue = value === "" ? 0 : Number(value);
-                                                    setFormData({
-                                                        ...formData,
-                                                        currentAmount: Number.isNaN(numValue) ? 0 : numValue,
-                                                    });
-                                                }}
-                                            />
-                                        </div>
-                                        {getErrorMessage("currentAmount") && (
-                                            <p className="text-sm text-red-500">{getErrorMessage("currentAmount")}</p>
-                                        )}
-                                    </div>
-
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="goalAmount">Goal Amount</Label>
-                                        <div className="relative">
-                                            <span className="text-muted-foreground text-sm absolute left-2 top-1/2 -translate-y-1/2">
-                                                ₱
-                                            </span>
-                                            <Input
-                                                id="goalAmount"
-                                                type="number"
-                                                min="1"
-                                                step="1"
-                                                placeholder="0"
-                                                className="pl-6"
-                                                value={formData.goalAmount || ""}
-                                                onChange={(e) => {
-                                                    // Remove leading zeros from the input
-                                                    const value = e.target.value.replace(/^0+/, "");
-                                                    // If value is empty after removing leading zeros, set to 1
-                                                    // Otherwise, convert to number
-                                                    const numValue = value === "" ? 0 : Number(value);
-                                                    setFormData({
-                                                        ...formData,
-                                                        goalAmount: Number.isNaN(numValue) ? 0 : numValue,
-                                                    });
-                                                }}
-                                            />
-                                        </div>
-                                        {getErrorMessage("goalAmount") && (
-                                            <p className="text-sm text-red-500">{getErrorMessage("goalAmount")}</p>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <Label htmlFor="notes">Notes (Optional)</Label>
-                                    <Textarea
-                                        id="notes"
-                                        placeholder="Add any additional notes about this savings account..."
-                                        value={formData.notes}
-                                        onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                                        rows={3}
-                                    />
-                                </div>
-                            </div>
-
-                            <DialogFooter>
-                                <Button
-                                    variant="outline"
-                                    onClick={() => {
-                                        setIsAddDialogOpen(false);
-                                        resetForm();
-                                    }}
-                                >
-                                    Cancel
-                                </Button>
-                                <Button
-                                    className="cursor-pointer"
-                                    onClick={handleAddSavings}
-                                    disabled={isAddPending}
-                                >
-                                    {isAddPending ? (
-                                        <IconLoader2 className="animate-spin" size={16} />
-                                    ) : (
-                                        "Add Savings"
-                                    )}
-                                </Button>
-                            </DialogFooter>
-                        </DialogContent>
-                    </Dialog>
-                </div>
+                <AddSavings
+                    isAddDialogOpen={isAddDialogOpen}
+                    setIsAddDialogOpen={setIsAddDialogOpen}
+                    setFormData={setFormData}
+                    formData={formData}
+                    setErrors={setErrors}
+                    resetForm={resetForm}
+                    getErrorMessage={getErrorMessage}
+                    optimisticUpdate={optimisticUpdate}
+                />
 
                 {/* Savings Items Grid */}
                 <div className="grid grid-cols-12 gap-4">
@@ -1048,7 +748,7 @@ export function SavingsManager() {
                                         <SelectValue placeholder="Select frequency" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {frequencyOptions.map(fr => (
+                                        {frequencyOptions.map((fr) => (
                                             <SelectItem key={fr.value} className="cursor-pointer" value={fr.value}>
                                                 {fr.label}
                                             </SelectItem>
@@ -1200,11 +900,16 @@ export function SavingsManager() {
                                     )}
                                     <div className="space-y-1">
                                         <p className="text-sm text-muted-foreground">Amount to Save</p>
-                                        <p className="text-lg font-semibold">₱{viewingItem.amountToSave.toLocaleString() || 0}</p>
+                                        <p className="text-lg font-semibold">
+                                            ₱{viewingItem.amountToSave.toLocaleString() || 0}
+                                        </p>
                                     </div>
                                     <div className="space-y-1">
                                         <p className="text-sm text-muted-foreground">Frequency</p>
-                                        <p className="text-lg font-semibold">{viewingItem.frequency.charAt(0).toUpperCase() + viewingItem.frequency.slice(1)}</p>
+                                        <p className="text-lg font-semibold">
+                                            {viewingItem.frequency.charAt(0).toUpperCase() +
+                                                viewingItem.frequency.slice(1)}
+                                        </p>
                                     </div>
 
                                     <div className="space-y-1">
@@ -1300,7 +1005,6 @@ export function SavingsManager() {
                                             </span>
                                         </div>
 
-
                                         <div className="flex justify-between w-full">
                                             <span className="text-sm">Estimated Time to Reach Goal</span>
                                             <span className="font-semibold text-nowrap text-sm text-right">
@@ -1330,7 +1034,6 @@ export function SavingsManager() {
                                             </span>
                                         </div>
                                     </div>
-
                                 </div>
 
                                 <div className="pt-4 border-t col-span-6 w-full">
@@ -1352,6 +1055,11 @@ export function SavingsManager() {
                                             <span className="font-semibold capitalize">
                                                 {savingsTypeLabels[viewingItem.type] || viewingItem.type}
                                             </span>
+                                        </div>
+
+                                        <div className="flex justify-between w-full">
+                                            <span className="text-sm">Fund used</span>
+                                            <span className="font-semibold capitalize">{incomedata.find(income => income.id === viewingItem.incomeId)?.income_name}</span>
                                         </div>
                                     </div>
                                 </div>

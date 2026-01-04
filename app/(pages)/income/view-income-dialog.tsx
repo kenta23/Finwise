@@ -6,7 +6,6 @@ import { frequencyLabels, incomeColors, incomeIcons } from "@/data";
 import type { incomeItem } from "@/types";
 
 export function ViewIncomeDialog({ viewingItem }: { viewingItem: incomeItem }) {
-    console.log("viewingItem", viewingItem);
     const [expensesPercentage, setExpensesPercentage] = useState<{
         travel: number;
         food: number;
@@ -27,6 +26,24 @@ export function ViewIncomeDialog({ viewingItem }: { viewingItem: incomeItem }) {
         queryFn: async () => await getCategories(),
         enabled: !!viewingItem.expenses,
     });
+
+    const [totalRemaining, setTotalRemaining] = useState<number>(0);
+    const [savingsPercentage, setSavingsPercentage] = useState<string>("0.00");
+
+
+    const calculateTotalRemaining = useCallback(() => {
+        const totalSavings = viewingItem.savings?.reduce((acc, savings) => acc + savings.amountToSave, 0) || 0;
+        const totalExpenses = viewingItem.expenses?.reduce((acc, expense) => acc + expense.amount, 0) || 0;
+        const total = Number(viewingItem.amount) - (Number(totalSavings) + Number(totalExpenses));
+
+        setSavingsPercentage(Number((totalSavings / viewingItem.amount) * 100).toFixed(1));
+        setTotalRemaining(Number(total));
+
+    }, [viewingItem.savings, viewingItem.expenses, viewingItem.amount])
+
+    console.log(totalRemaining)
+
+
 
 
     const computedExpensesPercentage = useCallback(() => {
@@ -64,7 +81,8 @@ export function ViewIncomeDialog({ viewingItem }: { viewingItem: incomeItem }) {
 
     useEffect(() => {
         computedExpensesPercentage();
-    }, [computedExpensesPercentage]);
+        calculateTotalRemaining();
+    }, [computedExpensesPercentage, calculateTotalRemaining]);
 
     return (
         <div className="space-y-6 py-4 grid grid-cols-12 items-center">
@@ -210,7 +228,18 @@ export function ViewIncomeDialog({ viewingItem }: { viewingItem: incomeItem }) {
                         </div>
                         <div className="flex justify-between">
                             <span className="text-sm">Savings</span>
-                            <span className="font-semibold">{expensesPercentage.savings}%</span>
+                            <span className="font-semibold">{savingsPercentage}%</span>
+                        </div>
+                    </div>
+
+                    <div className="pt-4 border-t col-span-6 w-full">
+                        <p className="text-sm text-muted-foreground mb-2">Remaining</p>
+
+                        <div className="flex justify-between w-full">
+                            <span className="text-sm">Total</span>
+                            <span className="font-semibold">
+                                ₱{totalRemaining.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                            </span>
                         </div>
                     </div>
                 </div>

@@ -66,6 +66,25 @@ export async function addSavings(
     }
 
     try {
+        const matchedIncome = await prisma.income.findFirst({
+            where: {
+                id: {
+                    equals: parsedData.data.incomeId as string,
+                },
+                userId: {
+                    equals: user.id,
+                },
+            },
+        })
+
+        if (!matchedIncome) {
+            return {
+                error: "Error!",
+                message: "Income not found",
+                data: null,
+            };
+        }
+
         const data = await prisma.savings.create({
             data: {
                 name: parsedData.data.name,
@@ -77,6 +96,7 @@ export async function addSavings(
                 currentAmount: Number(parsedData.data.currentAmount),
                 goalAmount: Number(parsedData.data.goalAmount),
                 notes: parsedData.data.notes,
+                incomeId: matchedIncome.id as string,
                 userId: user.id,
             },
         });
@@ -92,7 +112,7 @@ export async function addSavings(
         }
 
         return {
-            error: "Failed to add savings",
+            error: "Some error occured",
             message: "Failed to add savings",
             data: null,
         };

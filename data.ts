@@ -13,6 +13,13 @@ import {
 import { Frequency, type incomeType } from "./types";
 
 
+export const frequencyOptions: { label: string; value: string }[] = [
+	{ label: "Daily", value: "daily" },
+	{ label: "Bi-Weekly", value: "bi-weekly" },
+	{ label: "Weekly", value: "weekly" },
+	{ label: "Monthly", value: "monthly" },
+];
+
 export const categories = [
 	{
 		id: 1,

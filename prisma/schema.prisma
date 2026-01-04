@@ -87,6 +87,7 @@ model Income {
   frequency String 
   incomeSourceId String 
   expenses Expenses[]
+  savings Savings[]
   userId String
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
@@ -125,6 +126,7 @@ model Savings {
    type String 
    bankName String 
    accountNumber String?
+   incomeId String
    amountToSave Float @default(0)
    frequency String @default("monthly")
    currentAmount Float @default(0)
@@ -136,6 +138,9 @@ model Savings {
    updatedAt DateTime @updatedAt
 
    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+   income Income @relation(fields: [incomeId], references: [id], onDelete: Cascade)
+
+
 
    @@map("savings")
 }
