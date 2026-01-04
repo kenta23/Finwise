@@ -31,33 +31,33 @@ async function main() {
 	// 	throw new Error("No user found in database. Please create a user first before seeding.");
 	// }
 
-	const userId = user?.id;
+	// const userId = user?.id;
 
 
-	await prisma.savings.createMany({
-		data: [
-			{
-				name: "Emergency Fund",
-				type: "emergency",
-				bankName: "BPI",
-				accountNumber: "1234567890",
-				currentAmount: 1000,
-				goalAmount: 10000,
-				notes: "This is my emergency fund",
-				userId: userId as string,
-			},
-			{
-				name: "Vacation Fund",
-				type: "vacation",
-				bankName: "BPI",
-				accountNumber: "1234567890",
-				currentAmount: 1000,
-				goalAmount: 10000,
-				notes: "This is my vacation fund",
-				userId: userId as string,
-			},
-		]
-	})
+	// await prisma.savings.createMany({
+	// 	data: [
+	// 		{
+	// 			name: "Emergency Fund",
+	// 			type: "emergency",
+	// 			bankName: "BPI",
+	// 			accountNumber: "1234567890",
+	// 			currentAmount: 1000,
+	// 			goalAmount: 10000,
+	// 			notes: "This is my emergency fund",
+	// 			userId: userId as string,
+	// 		},
+	// 		{
+	// 			name: "Vacation Fund",
+	// 			type: "vacation",
+	// 			bankName: "BPI",
+	// 			accountNumber: "1234567890",
+	// 			currentAmount: 1000,
+	// 			goalAmount: 10000,
+	// 			notes: "This is my vacation fund",
+	// 			userId: userId as string,
+	// 		},
+	// 	]
+	// })
 
 }
 main()
