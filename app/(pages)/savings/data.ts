@@ -10,21 +10,7 @@ import {
 } from "@tabler/icons-react";
 import z from "zod";
 
-export type SavingsItem = {
-    id: string;
-    name: string;
-    type: string;
-    bankName: string;
-    accountNumber?: string;
-    incomeId: string;
-    amountToSave: number;
-    frequency: string;
-    currentAmount: number;
-    goalAmount: number;
-    notes?: string;
-    updatedAt: Date;
-    createdAt: Date;
-};
+
 
 export const savingsSchema = z.object({
     name: z.string().min(1, "Savings name is required"),

@@ -25,6 +25,7 @@ const schema = z.object({
 export default function ExpenseCategory() {
 	const [error, setError] = useState<z.ZodError | null>(null);
 
+
 	const {
 		data: categoriesData,
 		isLoading,
@@ -34,9 +35,9 @@ export default function ExpenseCategory() {
 		queryFn: async () => getCategories(),
 	});
 
-	console.log("error issues", error);
+	// console.log("error issues", error);
 
-	console.log("categoriesData", categoriesData);
+	// console.log("categoriesData", categoriesData);
 
 	if (isLoading) {
 		return (
@@ -46,7 +47,7 @@ export default function ExpenseCategory() {
 
 
 				<div className="col-span-12 gap-4 grid grid-cols-12 w-full">
-					{Array.from({ length: 6 }).map((_, index) => (
+					{Array.from({ length: 5 }).map((_, index) => (
 						<div key={index} className="col-span-12 flex w-full md:col-span-6 lg:col-span-4 items-center justify-between lg:gap-6 gap-4 p-4 rounded-lg">
 							<Skeleton className="flex bg-gray-200 flex-row items-center gap-4 w-full h-16" />
 						</div>
@@ -75,18 +76,12 @@ export default function ExpenseCategory() {
 				{/**Fetch Categories here... */}
 				<div className="col-span-12 gap-4 grid grid-cols-12 w-full">
 					{categories.map((item: categoryType, index: number) => {
-						// Safely map categories data with default empty array
-						// const filteredCategories =
-						// 	categoriesData?.data?.map((item: any) => {
-						// 		return {
-						// 			category: item.category,
-						// 			amount: item.amount,
-						// 		};
-						// 	}) || [];
 
 						const categories = categoriesData?.data?.find(
 							(cat: { name: string }) => cat.name === item.name
 						);
+
+						console.log('categories', categories)
 
 						if (!categories) return null;
 
@@ -111,7 +106,7 @@ export default function ExpenseCategory() {
 								0
 							) ?? 0;
 
-						console.log("totalExpenses", totalExpenses);
+						// console.log("totalExpenses", totalExpenses);
 						const percentage = totalExpenses > 0 ? (categoryAmount / totalExpenses) * 100 : 0;
 
 						return (

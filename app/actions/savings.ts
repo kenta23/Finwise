@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import prisma from "@/lib/prisma";
 import { getAuthenticatedUser, UNAUTHORIZED_RESPONSE } from "@/lib/server";
-import { editSavingsSchema, type SavingsItem, savingsSchema } from "../(pages)/savings/data";
+import type { SavingsItem } from "@/types";
+import { editSavingsSchema, savingsSchema } from "../(pages)/savings/data";
 
 export async function getSavings(): Promise<{ error: string | null; message: string; data: any }> {
     const user = await getAuthenticatedUser();
@@ -75,7 +76,7 @@ export async function addSavings(
                     equals: user.id,
                 },
             },
-        })
+        });
 
         if (!matchedIncome) {
             return {
@@ -187,8 +188,9 @@ export async function editSavings(
     }
 }
 
-
-export async function deleteSavings(id: string): Promise<{ error: string | null; message: string; data: any }> {
+export async function deleteSavings(
+    id: string
+): Promise<{ error: string | null; message: string; data: any }> {
     const user = await getAuthenticatedUser();
 
     if (!user) {
@@ -225,9 +227,7 @@ export async function deleteSavings(id: string): Promise<{ error: string | null;
             message: "Failed to delete savings",
             data: null,
         };
-    }
-
-    catch (error) {
+    } catch (error) {
         console.error("Error deleting savings", error);
         return {
             error: "Failed to delete savings",

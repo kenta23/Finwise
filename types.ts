@@ -72,6 +72,14 @@ export type incomeItem = {
 export type incomeItems = incomeItem[];
 export type categoryType = (typeof categories)[number];
 
+
+export type categoryItem = {
+    id: string;
+    name: string;
+    createdAt: Date;
+    updatedAt: Date;
+};
+
 export type categoryBreakdownType = {
     categoryId: number;
     categoryName: string;

@@ -119,6 +119,7 @@ export function ExpenseManager() {
             });
             queryClient.invalidateQueries({ queryKey: ["expenses"] });
             queryClient.invalidateQueries({ queryKey: ["summary"] });
+            queryClient.invalidateQueries({ queryKey: ["income"] });
         },
         onError: (error) => {
             toast.error(error.message, {
@@ -135,6 +136,7 @@ export function ExpenseManager() {
             });
             queryClient.invalidateQueries({ queryKey: ["expenses"] });
             queryClient.invalidateQueries({ queryKey: ["summary"] });
+            queryClient.invalidateQueries({ queryKey: ["income"] });
         },
         onError: (error) => {
             toast.error(error.message, {

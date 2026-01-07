@@ -4,6 +4,7 @@ import {
 	IconCash,
 	IconCashBanknoteFilled,
 	IconChartLine,
+	IconHeart,
 	IconMovie,
 	IconPigMoney,
 	IconPizzaFilled,
@@ -49,15 +50,16 @@ export const categories = [
 		color: "#60b27e",
 		backgroundColor: "#e7f7ee",
 	},
-	// {
-	// 	id: 5,
-	// 	name: "Savings",
-	// 	icon: IconCashBanknoteFilled,
-	// 	color: "#ffd600", // gold/yellow
-	// 	backgroundColor: "#fffbe7", // lighter yellow
-	// },
 	{
 		id: 5,
+		name: "Health",
+		icon: IconHeart,
+		color: "#e44e68",
+		backgroundColor: "#fde4ec",
+	},
+
+	{
+		id: 6,
 		name: "Other",
 		icon: IconPlus,
 		color: "#60b27e", // green
