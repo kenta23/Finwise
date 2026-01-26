@@ -115,7 +115,7 @@ export function ExpenseManager() {
             await addExpense(expense),
         onSuccess: (data) => {
             toast.success(data.message, {
-                description: "Expense added successfully",
+                description: `${data.data?.description} has been added to your expense list.`,
             });
             queryClient.invalidateQueries({ queryKey: ["expenses"] });
             queryClient.invalidateQueries({ queryKey: ["summary"] });

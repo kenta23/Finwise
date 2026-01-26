@@ -177,7 +177,7 @@ export function IncomeManager() {
             }),
         onSuccess: (data) => {
             toast.success(data.message, {
-                description: `${formData.income_name} has been added to your income list.`,
+                description: `${data.data?.income_name} has been added to your income list.`,
             });
 
             setIsAddDialogOpen(false);

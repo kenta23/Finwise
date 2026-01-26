@@ -26,8 +26,8 @@ const calculatePercentageChange = (
 	current: number,
 	previous: number
 ): { percentage: number; isPositive: boolean; formatted: string } => {
-	console.log("current percentage change", current);
-	console.log("previous percentage change", previous);
+	// console.log("current percentage change", current);
+	// console.log("previous percentage change", previous);
 
 	// Handle edge cases
 	if (previous === 0) {
@@ -43,9 +43,19 @@ const calculatePercentageChange = (
 	}
 
 	// Calculate the actual change (not absolute) to determine direction
+	//if value is negative, return 0 percentage 
+
 	const change = ((current - previous) / previous) * 100;
 	const isPositive = change >= 0;
-	const formatted = `${isPositive ? "+" : ""}${change.toFixed(1)}%`;
+	const formatted = `${isPositive ? "+" : ""}${Math.abs(change).toFixed(1)}%`;
+
+	if (change < 0) {
+		return {
+			percentage: 0,
+			isPositive: true,
+			formatted: "0%"
+		};
+	}
 
 	return {
 		percentage: Math.abs(change), // Return absolute value for percentage
@@ -53,6 +63,8 @@ const calculatePercentageChange = (
 		formatted,
 	};
 };
+
+
 
 
 
@@ -126,13 +138,16 @@ export function SectionCards() {
 				setTotalExpenses(expensesPercentage);
 				setTotalSavings(savingsPercentage);
 				setRemainingBalance(balancePercentage);
+
+
 			}
 		}
 
-		console.log("fetching");
 	}, [data, cachedData]);
 
-	console.log("remainingBalance", remainingBalance);
+
+
+	console.log('cached data', cachedData?.balance)
 
 
 	const remainingBalanceFn = () => {
@@ -240,7 +255,7 @@ export function SectionCards() {
 
 				<CardFooter className="flex-col items-start gap-1.5 text-sm">
 					<div className="line-clamp-1 flex gap-2 font-medium">
-						Expenses vs Income this month{" "}
+						Expenses
 						{totalExpenses.isPositive ? (
 							<IconTrendingUp className="size-4 text-red-500" />
 						) : (

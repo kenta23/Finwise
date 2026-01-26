@@ -68,7 +68,7 @@ export function QuickAddDialog({
 		},
 	});
 
-	console.log("income", income, "expense", expense);
+	// console.log("income", income, "expense", expense);
 
 	async function handleExpenseSubmit(e: React.MouseEvent<HTMLButtonElement>) {
 		e.preventDefault();
@@ -105,8 +105,8 @@ export function QuickAddDialog({
 			console.log("INCOME TO SUBMIT", income);
 
 			if (!res?.error) {
-				toast.success("Income added successfully", {
-					description: res?.message,
+				toast.success(res?.message, {
+					description: `${income.map((item) => item.income_name).join(", ")} has been added to your income list.`,
 				});
 			} else {
 				toast.error("Failed to add income", {
